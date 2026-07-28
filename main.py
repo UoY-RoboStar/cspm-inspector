@@ -6,6 +6,8 @@ import os
 import sys
 
 from cspm_inspector import file_parser, statistics_generator
+from cspm_inspector.csv_writer import write_entry_csv, write_dataset_csv, write_entries_csv
+
 
 def _print_dataset_header():
     print('{:25s} {:>8s} {:>8s} {:>8s} {:>15s} {:>15s} {:>15s}'.format("Operator","Pass" , "Fail" , "Total" , "Per Entry" , "Per Pass" , "Per Fail"))
@@ -22,7 +24,7 @@ def _print_entries_header():
     print('{:25s} {:>15s}'.format("Operator", "Count"))
 
 
-def _print_dataset_statistics(data):
+def _print_dataset_statistics(data,output):
     _print_dataset_header()
 
     for operator in data.get("total"):
@@ -38,7 +40,10 @@ def _print_dataset_statistics(data):
                           )
                   )
 
-def _print_unique_entries_statistics(data):
+    if output is not None:
+        write_dataset_csv(data, output)
+
+def _print_unique_entries_statistics(data,output):
     record = {"unique_entry": 0, "entry": 0, "e -> P": 0, "P \\ A": 0,
               "P[[from<-to]]": 0, "P |\\ A": 0, "P |~| Q": 0,
               "P [] Q": 0, "P [| A |] Q": 0, "P ||| Q": 0,
@@ -61,14 +66,21 @@ def _print_unique_entries_statistics(data):
             print('{:25s} {:15d} {:25f}'.format(operator, record.get(operator), record.get(operator)/data.get("total").get("unique_entry")))
 
 
-def _print_single_entry_statistics(data):
+    if output is not None:
+        write_entries_csv(record, data.get("total").get("unique_entry"), output)
+
+
+def _print_single_entry_statistics(data, output):
     _print_entries_header()
     for entry in data:
         for operator in data.get(entry):
             print('{:25s} {:15d}'.format(operator, data.get(entry).get(operator)))
 
+    if output is not None:
+        write_entry_csv(data, output)
 
-def _run_dataset_calculator(parsed_csv):
+
+def _run_dataset_calculator(parsed_csv, output):
     record = {"unique_entry":0,"entry":0,"e -> P":0,"P \\ A":0,
               "P[[from<-to]]":0,"P |\\ A":0,"P |~| Q":0,
               "P [] Q":0,"P [| A |] Q":0,"P ||| Q":0,
@@ -146,12 +158,12 @@ def _run_dataset_calculator(parsed_csv):
                      for k in data.get("pass").keys() | data.get("fail").keys()}
 
 
-    _print_dataset_statistics(data)
+    _print_dataset_statistics(data,output)
     print()
-    _print_unique_entries_statistics(data)
+    _print_unique_entries_statistics(data,output)
 
 
-def _run_calculator(parsed_csp):
+def _run_calculator(parsed_csp, output):
     entry_record = {"e -> P":0,"P \\ A":0,
               "P[[from<-to]]":0,"P |\\ A":0,"P |~| Q":0,
               "P [] Q":0,"P [| A |] Q":0,"P ||| Q":0,
@@ -191,7 +203,7 @@ def _run_calculator(parsed_csp):
 
     data[parsed_csp] = entry_record
 
-    _print_single_entry_statistics(data)
+    _print_single_entry_statistics(data, output)
 
 
 def main() -> None:
@@ -202,19 +214,22 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output_csv",
-        help="Write a <file>-output.csv alongside the explanation",
+        action="store_true",
+        help="Write a <file>-output.csv, and <file>-output-entries.csv if a csv is input",
     )
     args = parser.parse_args()
 
     if not os.path.isfile(args.csv_p_file):
         sys.exit(f"Error: file not found: {args.csv_p_file}")
 
+    output = args.csv_p_file.split(".csv")[0] + "-output.csv" if args.output_csv else None
+
     if args.csv_p_file.endswith(".csv"):
         parsed_csv = file_parser.parse_csv(args.csv_p_file)
-        _run_dataset_calculator(parsed_csv)
+        _run_dataset_calculator(parsed_csv, output)
     elif args.csv_p_file.endswith(".csp"):
         parsed_csp = file_parser.parse_csp(args.csv_p_file)
-        _run_calculator(parsed_csp)
+        _run_calculator(parsed_csp, output)
 
 
 if __name__ == "__main__":
