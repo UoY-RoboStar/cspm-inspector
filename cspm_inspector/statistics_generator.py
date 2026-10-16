@@ -14,7 +14,7 @@ def perform_analysis(entry:str) -> tuple[
 
     rename =  entry.count("[[", 0, len(entry))
 
-    project =  entry.count("|\\", 0, len(entry))
+    project =  regex_cnt(entry, '\s*\|\\\\\s*')
 
     internal_choice =  regex_cnt(entry, '(?:^|[^=;\s(]\s*)(\|~\|)\s*') #entry.count(") |~|", 0, len(entry))
 
@@ -28,11 +28,11 @@ def perform_analysis(entry:str) -> tuple[
 
     sequential_composition =  regex_cnt(entry, '(?:^|[^=\s(]\s*)(;)\s*') #entry.count(";", 0, len(entry))
 
-    exception =  entry.count("|>", 0, len(entry))
+    exception =  regex_cnt(entry, '\s*\|\>\s*')
 
-    timeout =  entry.count("[>", 0, len(entry))
+    timeout =  regex_cnt(entry, '\s*\[\>\s*')
 
-    interrupt =  entry.count("/\\", 0, len(entry))
+    interrupt =  regex_cnt(entry, '\s*/\\\s*')
 
     guard =  entry.count("&", 0, len(entry))
 
@@ -46,7 +46,7 @@ def perform_analysis(entry:str) -> tuple[
 
     rep_alphabetised_parallel = regex_cnt(entry, '(?:^|[=;(]\s*)(\|\|(?!\|))\s*') #entry.count("= || ", 0, len(entry))
 
-    rep_sequential_composition = regex_cnt(entry, '(?:^|[=(]\s*)(;\s)\s*') #entry.count("= || ", 0, len(entry))
+    rep_sequential_composition = regex_cnt(entry, '(?:^|[=(]\s*)(;\s)\s*') #entry.count("= ; ", 0, len(entry))
 
     rep_linked_parallel = regex_cnt(entry, '(?:^|[=;(]\s*)(\[(?s:.*?)<->(?s:.*?)\])\s*')
 
@@ -55,13 +55,13 @@ def perform_analysis(entry:str) -> tuple[
     replicated = (rep_interleave+rep_sequential_composition+rep_alphabetised_parallel+rep_generalised_parallel
                   +rep_internal_choice+rep_external_choice+rep_linked_parallel)
 
-    let_within = regex_cnt(entry, "[^a-zA-Z0-9]let[^a-zA-Z0-9]")
+    let_within = regex_cnt(entry, "(?s)(?<![a-zA-Z0-9])let(?![a-zA-Z0-9]).*?(?<![a-zA-Z0-9])within(?![a-zA-Z0-9])")
 
-    if_then = regex_cnt(entry, "[^a-zA-Z0-9]if[^a-zA-Z0-9]")
+    if_then = regex_cnt(entry, "(?s)(?<![a-zA-Z0-9])if(?![a-zA-Z0-9]).*?(?<![a-zA-Z0-9])then(?![a-zA-Z0-9])")
 
     linked_parallel =regex_cnt(entry, '(?:^|[^=;(]\s*)(\[(?s:.*?)<->(?s:.*?)\])\s*')
 
-    lambda_pattern = regex_cnt(entry, '(?:^|[=;\s(]\s*)\\\s*')
+    lambda_pattern = regex_cnt(entry, '(?:^|[=;(]\s*)\\\s*')
 
     synchronising_external_choice = regex_cnt(entry, '(?:^|[^=;(]\s*)(\[\+)\s*')
 

@@ -41,6 +41,33 @@ def write_dataset_csv(data, file_path: str) -> None:
                               ])
 
 
+
+def write_neutral_dataset_csv(data, file_path: str) -> None:
+    print(f"Writing to {file_path}")
+
+    with open(file_path, mode="a+") as csv_file:
+        csv_writer = csv.writer(csv_file)
+        if not (os.path.isfile(file_path) and os.path.getsize(file_path) > 0):
+            csv_writer.writerow(["Operator",
+                                 "Total Count across all Dataset Entries",
+                                 "Average Count Per Entry"])
+
+        csv_writer.writerow(["# of dataset entries",
+                      data.get("total").get("# of dataset entries"),
+                      0 if data.get("total").get("# of dataset entries") == 0 else
+                      data.get("total").get("# of dataset entries") / data.get("total").get("# of dataset entries")
+                      ]
+              )
+
+        for operator in data.get("total"):
+            if not operator == "# of dataset entries" and not operator == "# of unique dataset entries":
+                csv_writer.writerow([operator,
+                              data.get("total").get(operator),
+                              0 if data.get("total").get("# of dataset entries") == 0 else
+                                     data.get("total").get(operator) / data.get("total").get("# of dataset entries")
+                              ])
+
+
 def write_entries_csv(record, count, file_path: str) -> None:
     updated_file_path = file_path.split(".csv")[0] + "-entries.csv"
     print(f"Writing to {updated_file_path}")
