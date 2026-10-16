@@ -6,7 +6,7 @@ import os
 import sys
 
 from cspm_inspector import file_parser, statistics_generator
-from cspm_inspector.csv_writer import write_entry_csv, write_dataset_csv, write_entries_csv
+from cspm_inspector.csv_writer import write_entry_csv, write_dataset_csv, write_entries_csv, write_neutral_dataset_csv
 
 
 def _print_dataset_header():
@@ -25,6 +25,13 @@ def _print_dataset_header():
                                                                        "Passing Entry" ,
                                                                        "Failing Entry"))
 
+def _print_neutral_dataset_header():
+    print('{:25s} {:>24s} {:>20s} '.format("Operator",
+                                                                       "Total Count across" ,
+                                                                       "Average Count" ))
+    print('{:25s} {:>24s} {:>20s} '.format("",
+                                                                       "all Dataset Entries" ,
+                                                                       "Per Entry" ))
 
 def _print_unique_entry_dataset_header(count):
     print()
@@ -75,21 +82,44 @@ def _print_dataset_statistics(data,output):
     if output is not None:
         write_dataset_csv(data, output)
 
+def _print_neutral_dataset_statistics(data,output):
+    _print_neutral_dataset_header()
+    print('{:25s} {:24d} {:20f} '
+          .format("# of dataset entries",
+                  data.get("total").get("# of dataset entries"),
+                  0 if data.get("total").get("# of dataset entries") == 0 else
+                  data.get("total").get("# of dataset entries") / data.get("total").get("# of dataset entries")
+                  )
+          )
+
+    for operator in data.get("total"):
+        if not operator=="# of unique dataset entries" and not operator=="# of dataset entries":
+            print('{:25s} {:24d} {:20f} '
+                  .format(operator,
+                          data.get("total").get(operator),
+                          0 if data.get("total").get("# of dataset entries") == 0 else
+                                            data.get("total").get(operator)/data.get("total").get("# of dataset entries")
+                          )
+                  )
+
+    if output is not None:
+        write_neutral_dataset_csv(data, output)
+
 def _print_unique_entries_statistics(data,output):
-    record = {"# of unique dataset entries":0,"# of dataset entries":0,"e -> P":0,"P \\ A":0,
-              "P[[from<-to]]":0,"P |\\ A":0,"P |~| Q":0,
+    record = {"# of unique dataset entries":0,"# of dataset entries":0,"e -> P":0,r"P \ A":0,
+              "P[[from<-to]]":0,r"P |\ A":0,"P |~| Q":0,
               "P [] Q":0,"P [| A |] Q":0,"P ||| Q":0,
               "P [ A || B ] Q":0,"P ; Q":0,"P [| A |> Q":0,
-              "P [> Q":0,"P /\\ Q":0,"b & P":0,
+              "P [> Q":0,r"P /\ Q":0,"b & P":0,
               "||| x:{} @ P(x)":0,"[] x:{} @ P(x)":0,
               "|~| x:{} @ P(x)":0,"[|A|] x:{} @ P(x)":0,
-              "|| x:{} @ P(x)": 0, "[l <-> r] x:{} @ P(x)": 0,
+              "|| x:{} @ [A] P(x)": 0, "[l <-> r] x:{} @ P(x)": 0,
               "; x:{} @ P(x)":0, "[+ A +] x:{} @ P(x)": 0, "@":0,
-              "let_within":0, "\\ ps @ e":0, "if_then_else":0,
-              "P /+ A +\\ Q":0, "P [+ A +] Q":0, "P [c <-> d] Q":0}
+              "let_within":0, r"\ ps @ e":0, "if_then_else":0,
+              r"P /+ A +\ Q":0, "P [+ A +] Q":0, "P [c <-> d] Q":0}
 
     for entry in data:
-        if not entry=="fail" and not entry=="pass" and not entry=="total":
+        if not entry=="fail" and not entry=="pass" and not entry=="neutral" and not entry=="total":
             updated = {k: data.get(entry).get(k, 0) + record.get(k, 0)
                for k in data.get(entry).keys() | record.keys()}
             record.update(updated)
@@ -117,18 +147,18 @@ def _print_single_entry_statistics(data, output):
 
 
 def _run_dataset_calculator(parsed_csv, output):
-    record = {"# of unique dataset entries":0,"# of dataset entries":0,"e -> P":0,"P \\ A":0,
-              "P[[from<-to]]":0,"P |\\ A":0,"P |~| Q":0,
+    record = {"# of unique dataset entries":0,"# of dataset entries":0,"e -> P":0,r"P \ A":0,
+              "P[[from<-to]]":0,r"P |\ A":0,"P |~| Q":0,
               "P [] Q":0,"P [| A |] Q":0,"P ||| Q":0,
               "P [ A || B ] Q":0,"P ; Q":0,"P [| A |> Q":0,
-              "P [> Q":0,"P /\\ Q":0,"b & P":0,
+              "P [> Q":0,r"P /\ Q":0,"b & P":0,
               "||| x:{} @ P(x)":0,"[] x:{} @ P(x)":0,
               "|~| x:{} @ P(x)":0,"[|A|] x:{} @ P(x)":0,
-              "|| x:{} @ P(x)": 0, "[l <-> r] x:{} @ P(x)": 0,
+              "|| x:{} @ [A] P(x)": 0, "[l <-> r] x:{} @ P(x)": 0,
               "; x:{} @ P(x)":0, "[+ A +] x:{} @ P(x)": 0, "@":0,
-              "let_within":0, "\\ ps @ e":0, "if_then_else":0,
-              "P /+ A +\\ Q":0, "P [+ A +] Q":0, "P [c <-> d] Q":0}
-    data = {"pass":record.copy(), "fail": record.copy()}
+              "let_within":0, r"\ ps @ e":0, "if_then_else":0,
+              r"P /+ A +\ Q":0, "P [+ A +] Q":0, "P [c <-> d] Q":0}
+    data = {"pass":record.copy(), "fail": record.copy(), "neutral": record.copy()}
     count = 0
     for entry in parsed_csv:
         unique=False
@@ -136,17 +166,17 @@ def _run_dataset_calculator(parsed_csv, output):
         if not parsed_csv.get(entry)[0] in data:
             entry_record = record.copy()
 
-            (prefix, hide, rename, project, internal_choice, external_choice, generalised_parallel,
-             alphabetised_parallel, interleave, sequential_composition, exception, timeout, interrupt, guard,
-             rep_generalised_parallel, rep_alphabetised_parallel, rep_interleave, rep_internal_choice,
-             rep_external_choice, rep, rep_sequential_composition, rep_linked_parallel, lambda_pattern,
-             rep_synchronising_parallel, let_within, if_then, linked_parallel, synchronising_interrupt,
-             synchronising_external_choice) = (statistics_generator.perform_analysis(parsed_csv.get(entry)[0]))
+            (prefix,hide,rename,project,internal_choice,external_choice,generalised_parallel,alphabetised_parallel,
+            interleave,sequential_composition,exception,timeout,interrupt,guard,rep_generalised_parallel,
+            rep_alphabetised_parallel,rep_interleave,rep_internal_choice,rep_external_choice, replicated,
+            rep_sequential_composition, rep_linked_parallel, lambda_pattern,
+            rep_synchronising_parallel, let_within, if_then, linked_parallel, synchronising_interrupt,
+            synchronising_external_choice) = (statistics_generator.perform_analysis(parsed_csv.get(entry)[0]))
 
             entry_record.update({"e -> P": prefix})
-            entry_record.update({"P \\ A": hide})
+            entry_record.update({r"P \ A": hide})
             entry_record.update({"P[[from<-to]]": rename})
-            entry_record.update({"P |\\ A": project})
+            entry_record.update({r"P |\ A": project})
             entry_record.update({"P |~| Q": internal_choice})
             entry_record.update({"P [] Q": external_choice})
             entry_record.update({"P [| A |] Q": generalised_parallel})
@@ -155,21 +185,21 @@ def _run_dataset_calculator(parsed_csv, output):
             entry_record.update({"P ; Q": sequential_composition})
             entry_record.update({"P [| A |> Q": exception})
             entry_record.update({"P [> Q": timeout})
-            entry_record.update({"P /\\ Q": interrupt})
+            entry_record.update({r"P /\ Q": interrupt})
             entry_record.update({"b & P": guard})
             entry_record.update({"||| x:{} @ P(x)": rep_interleave})
             entry_record.update({"[] x:{} @ P(x)": rep_external_choice})
             entry_record.update({"|~| x:{} @ P(x)": rep_internal_choice})
             entry_record.update({"[|A|] x:{} @ P(x)": rep_generalised_parallel})
             entry_record.update({"|| x:{} @ [A] P(x)": rep_alphabetised_parallel})
-            entry_record.update({"@": rep})
+            entry_record.update({"@": replicated})
             entry_record.update({"[l <-> r] x:{} @ P(x)": rep_linked_parallel})
             entry_record.update({"; x:{} @ P(x)": rep_sequential_composition})
             entry_record.update({"[+ A +] x:{} @ P(x)": rep_synchronising_parallel})
             entry_record.update({"let_within":let_within})
-            entry_record.update({"\\ ps @ e":lambda_pattern})
+            entry_record.update({r"\ ps @ e":lambda_pattern})
             entry_record.update({"if_then_else":if_then})
-            entry_record.update({"P /+ A +\\ Q":synchronising_interrupt})
+            entry_record.update({r"P /+ A +\ Q":synchronising_interrupt})
             entry_record.update({"P [+ A +] Q":synchronising_external_choice})
             entry_record.update({"P [c <-> d] Q":linked_parallel})
             entry_record.update({"# of dataset entries": 1})
@@ -182,11 +212,12 @@ def _run_dataset_calculator(parsed_csv, output):
             entry_record.update({"# of dataset entries": entry_count+1})
             data.update({entry: entry_record})
 
-
-        if parsed_csv.get(entry)[2] == "true":
+        if parsed_csv.get(entry)[2] == "true" and not parsed_csv.get(entry)[2] == "":
             passed = data.get("pass")
-        else:
+        elif not parsed_csv.get(entry)[2] == "":
             passed = data.get("fail")
+        else:
+            passed = data.get("neutral")
 
         updated = {k: passed.get(k, 0) + (1 if data.get(parsed_csv.get(entry)[0]).get(k, 0) != 0 else 0)
                          for k in passed.keys() | data.get(parsed_csv.get(entry)[0]).keys()}
@@ -194,20 +225,25 @@ def _run_dataset_calculator(parsed_csv, output):
         if unique:
             updated.update({"# of unique dataset entries": passed.get("# of unique dataset entries") + 1})
 
-        if parsed_csv.get(entry)[2] == "true":
+        if parsed_csv.get(entry)[2] == "true" and not parsed_csv.get(entry)[2] == "":
             data.update({"pass":updated})
-        else:
+        elif not parsed_csv.get(entry)[2] == "":
             data.update({"fail":updated})
+        else:
+            data.update({"neutral":updated})
 
         count+=1
 
     print(count)
 
     data["total"] = {k: data.get("pass").get(k, 0) + data.get("fail").get(k, 0)
-                     for k in data.get("pass").keys() | data.get("fail").keys()}
+                        + data.get("neutral").get(k, 0)
+                     for k in data.get("pass").keys() | data.get("fail").keys() | data.get("neutral").keys() }
 
-
-    _print_dataset_statistics(data,output)
+    if data.get("neutral").get("# of dataset entries") == 0:
+        _print_dataset_statistics(data,output)
+    else:
+        _print_neutral_dataset_statistics(data,output)
     print()
     _print_unique_entries_statistics(data,output)
 
