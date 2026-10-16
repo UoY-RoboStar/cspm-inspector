@@ -1,0 +1,31 @@
+Operator,Total Count across all Dataset Entries,Average Count Per Dataset Entry
+No. of entries,20,
+e -> P,867,43.35
+P \ A,25,1.25
+P[[from<-to]],28,1.4
+P |\ A,0,0.0
+P |~| Q,12,0.6
+P [] Q,341,17.05
+P [| A |] Q,14,0.7
+P ||| Q,17,0.85
+P [ A || B ] Q,34,1.7
+P ; Q,161,8.05
+P [| A |> Q,12,0.6
+P [> Q,0,0.0
+P /\ Q,10,0.5
+b & P,36,1.8
+||| x:{} @ P(x),8,0.4
+[] x:{} @ P(x),10,0.5
+|~| x:{} @ P(x),1,0.05
+[|A|] x:{} @ P(x),0,0.0
+|| x:{} @ [A] P(x),7,0.35
+[l <-> r] x:{} @ P(x),0,0.0
+; x:{} @ P(x),0,0.0
+[+ A +] x:{} @ P(x),0,0.0
+@,26,1.3
+let_within,33,1.65
+\ ps @ e,0,0.0
+if_then_else,44,2.2
+P /+ A +\ Q,0,0.0
+P [+ A +] Q,0,0.0
+P [c <-> d] Q,0,0.0

@@ -1,0 +1,4276 @@
+Name,CSP,Providence ,Selection Criteria,Assertion,Passed,Counterexample,Representation
+Dining Philosophers,"-- The five dining philosophers for FDR
+
+-- Bill Roscoe
+
+-- The most standard example of them all.  We can determine how many
+-- (with the conventional number being 5):
+
+N = 6
+
+PHILNAMES= {0..N-1}
+FORKNAMES = {0..N-1}
+
+channel thinks, sits, eats, getsup:PHILNAMES
+channel picks, putsdown:PHILNAMES.FORKNAMES
+
+-- A philosopher thinks, sits down, picks up two forks, eats, puts down forks
+-- and gets up, in an unending cycle.   
+
+PHIL(i) = thinks.i -> sits!i -> picks!i!i -> picks!i!((i+1)%N) ->
+          eats!i -> putsdown!i!((i+1)%N) -> putsdown!i!i -> getsup!i -> PHIL(i)
+
+-- Of course the only events relevant to deadlock are the picks and putsdown
+-- ones.  Try the alternative ""stripped down"" definition
+
+PHILs(i) =  picks!i!i -> picks!i!((i+1)%N) ->
+           putsdown!i!((i+1)%N) -> putsdown!i!i -> PHILs(i)
+
+
+
+-- Its alphabet is
+
+AlphaP(i) = {thinks.i, sits.i,picks.i.i,picks.i.(i+1)%N,eats.i,putsdown.i.i,
+             putsdown.i.(i+1)%N,getsup.i}
+
+-- A fork can only be picked up by one neighbour at once!
+
+FORK(i) = picks!i!i -> putsdown!i!i -> FORK(i)
+         []  picks!((i-1)%N)!i -> putsdown!((i-1)%N)!i -> FORK(i)
+
+AlphaF(i) = {picks.i.i, picks.(i-1)%N.i, putsdown.i.i, putsdown.(i-1)%N.i}
+
+-- We can build the system up in several ways, but certainly
+-- have to use some form of parallel that allows us to
+-- build a network parameterized by N.  The following uses
+-- a composition of N philosopher/fork pairs, each individually
+-- a parallel composition.
+
+SYSTEM = || i:PHILNAMES@[union(AlphaP(i),AlphaF(i))] 
+                       (PHIL(i)[AlphaP(i)|| AlphaF(i)] FORK(i))
+
+-- or stripped down
+
+SYSTEMs = || i:PHILNAMES@[union(AlphaP(i),AlphaF(i))] 
+                       (PHILs(i)[AlphaP(i)|| AlphaF(i)] FORK(i))
+
+
+-- As an alternative (see Section 2.3) we can create separate
+-- collections of the philosophers and forks, each composed
+-- using interleaving ||| since there is no communication inside
+-- these groups.
+
+PHILS = ||| i:PHILNAMES@ PHIL(i)
+FORKS = ||| i:FORKNAMES@ FORK(i)
+
+SYSTEM' = PHILS[|{|picks, putsdown|}|]FORKS
+
+-- The potential for deadlock is illustrated by 
+
+assert SYSTEM :[deadlock free [F]]
+
+-- or equivalently in the stripped down
+assert SYSTEMs :[deadlock free [F]]
+
+-- which will find the same deadlock a lot faster.",https://cocotec.io/fdr/manual/examples/index.html#fdr4-introduction,"Tool demo
+Direct source available
+Seminal example
+Medium length and complexity",assert SYSTEMs :[deadlock free [F]],FALSE,,
+FDR 4.0 Introduction,"-- Introducing FDR4.0
+-- Bill Roscoe, November 2013
+
+-- A file to illustrate the functionality of FDR4.0.
+
+-- Note that this file is necessarily basic and does not stretch the
+-- capabilities of the tool.
+
+-- To run FDR4 with this file just type ""fdr4 intro.csp"" in the directory
+-- containing intro.csp, assuming that fdr4 is in your $PATH or has been aliased
+-- to run the tool.
+
+-- Alternatively run FDR4 and enter the command "":load intro.csp"".
+
+-- You will see that all the assertions included in this file appear on the RHS
+-- of the window as prompts. This allows you to run them.
+
+-- This file contains some examples based on playing a game of tennis between A
+-- and B.
+
+channel pointA, pointB, gameA, gameB
+
+Scorepairs = {(x,y) | x  <- {0,15,30,40}, y <- {0,15,30,40}, (x,y) != (40,40)}
+
+datatype scores = NUM.Scorepairs | Deuce | AdvantageA | AdvantageB
+
+Game(p) = pointA -> IncA(p)
+         [] pointB -> IncB(p)
+
+IncA(AdvantageA) = gameA -> Game(NUM.(0,0))
+IncA(NUM.(40,_)) = gameA -> Game(NUM.(0,0))
+IncA(AdvantageB) = Game(Deuce)
+IncA(Deuce) = Game(AdvantageA)
+IncA(NUM.(30,40)) = Game(Deuce)
+IncA(NUM.(x,y)) =  Game(NUM.(next(x),y))
+IncB(AdvantageB) = gameB -> Game(NUM.(0,0))
+IncB(NUM.(_,40)) = gameB -> Game(NUM.(0,0))
+IncB(AdvantageA) = Game(Deuce)
+IncB(Deuce) = Game(AdvantageB)
+IncB(NUM.(40,30)) = Game(Deuce)
+IncB(NUM.(x,y)) = Game(NUM.(x,next(y)))
+-- If you uncomment the following line it will introduce a type error to
+-- illustrate the typechecker.
+-- IncB((x,y)) = Game(NUM.(next(x),y))
+
+next(0) = 15
+next(15) = 30
+next(30) = 40
+
+-- Note that you can check on non-process functions you have written. Try typing
+-- next(15) at the command prompt of FDR4.
+
+-- Game(NUM.(0,0)) thus represents a game which records when A and B win
+-- successive games, we can abbreviate it as
+
+Scorer = Game(NUM.(0,0))
+
+-- Type "":probe Scorer"" to animate this process.    
+-- Type "":graph Scorer"" to show the transition system of this process
+
+-- We can compare this process with some others:
+
+assert Scorer [T= STOP
+assert Scorer [F= Scorer
+assert STOP [T= Scorer
+
+-- The results of all these are all obvious.
+
+-- Also, compare the states of this process
+
+assert Scorer [T= Game(NUM.(15,0))
+assert Game(NUM.(30,30)) [FD=  Game(Deuce)
+
+-- The second of these gives a result you might not expect: can you explain why?
+-- (Answer below....)
+
+-- For the checks that fail, you can run the debugger, which illustrates why the
+-- given implementation (right-hand side) of the check can behave in a way that
+-- the specification (LHS) cannot.  Because the examples so far are all
+-- sequential processes, you cannot subdivide the implementation behaviours into
+-- sub-behaviours within the debugger.
+
+-- One way of imagining the above process is as a scorer (hence the name) that
+-- keeps track of the results of the points that A and B score.  We could put a
+-- choice mechanism in parallel: the most obvious picks the winner of each point
+-- nondeterministically:
+
+ND = pointA -> ND |~| pointB -> ND
+
+-- We can imagine one where B gets at least one point every time A gets one:
+
+Bgood = pointA -> pointB -> Bgood |~| pointB -> Bgood
+
+-- and one where B gets two points for every two that A get, so allowing A to
+-- get two consecutive points:
+
+Bg = pointA -> Bg1 |~| pointB -> Bg
+
+Bg1 = pointA -> pointB ->  Bg1 |~| pointB -> Bg
+
+assert Bg [FD= Bgood 
+assert Bgood [FD= Bg 
+
+-- We might ask what effect these choice mechanisms have on our game of tennis:
+-- do you think that B can win a game in these two cases?
+
+BgoodS = Bgood [|{pointA,pointB}|] Scorer
+BgS = Bg [|{pointA,pointB}|] Scorer
+
+assert STOP [T= BgoodS \diff(Events,{gameA})
+assert STOP [T= BgS \diff(Events,{gameA})
+
+-- You will find that A can in the second case, and in fact can win the very
+-- first game.  You can now see how the debugger explains the behaviours inside
+-- hiding and of different parallel components.
+
+-- Do you think that in this case A can ever get two games ahead?  In order to
+-- avoid an infinite-state specification, the following one actually says that A
+-- can't get two games ahead when it has never been as many as 6 games behind:
+
+Level = gameA -> Awinning(1)
+        [] gameB -> Bwinning(1)
+
+Awinning(1) = gameB -> Level -- A not permitted to win here
+
+Bwinning(6) = gameA -> Bwinning(6) [] gameB -> Bwinning(6)
+Bwinning(1) = gameA -> Level [] gameB -> Bwinning(2)
+Bwinning(n) = gameA -> Bwinning(n-1) [] gameB -> Bwinning(n+1)
+
+assert Level [T= BgS \{pointA,pointB}
+
+-- Exercise for the interested: see how this result is affected by changing Bg
+-- to become yet more liberal. Try Bgn(n) as n copies of Bgood in ||| parallel.
+
+-- Games of tennis can of course go on for ever, as is illustrated by the check
+
+assert BgS\{pointA,pointB} :[divergence-free]
+
+-- Notice that here, for the infinite behaviour that is a divergence, the
+-- debugger shows you a loop.
+
+-- Finally, the answer to the question above about the similarity of
+-- Game(NUM.(30,30)) and Game(Deuce).
+
+-- Intuitively these processes represent different states in the game: notice
+-- that 4 points have occurred in the first and at least 6 in the second. But
+-- actually the meaning (semantics) of a state only depend on behaviour going
+-- forward, and both 30-all and deuce are scores from which A or B win just when
+-- they get two points ahead.  So these states are, in our formulation,
+-- equivalent processes.
+
+-- FDR has compression functions that try to cut the number of states of
+-- processes: read the books for why this is a good idea. Perhaps the simplest
+-- compression is strong bisimulation, and you can see the effect of this by
+-- comparing the graphs of Scorer and
+
+transparent sbisim, wbisim, diamond
+
+BScorer = sbisim(Scorer)
+
+-- Note that FDR automatically applies bisimulation in various places.
+
+-- To see how effective compressions can sometimes be, but that
+-- sometimes one compression is better than another compare 
+
+NDS = (ND [|{pointA,pointB}|] Scorer)\{pointA,pointB}
+
+wbNDS = wbisim(NDS)
+sbNDS = sbisim(NDS)
+nNDS = sbisim(diamond(NDS))",https://cocotec.io/fdr/manual/examples/index.html#fdr4-introduction,"Tool demo
+Direct source available
+Seminal example
+Medium length and complexity","assert BgS :[deadlock free]
+",,,
+Alternating Bit Protocol,"-- abp.csp
+
+-- Alternating bit protocol.
+
+-- Bill Roscoe, August 1992
+-- FDR2 version, June 1996
+
+-- This is the simplest of a number of our examples
+-- which make use of a pair of media
+-- which are permitted to lose data, and provided no infinite sequence is lost
+-- will work independently of how lossy the channels are (unlike the file
+-- prots.csp where the protocols were designed to cope with specific badnesses).-- They work by transmitting messages one way and acknowledgements the other.
+
+-- The alternating bit protocol provides the most standard of all protocol
+-- examples, and is while it is too simple for practical purposes, its
+-- analysis contains much that remains relevant in realistic examples.
+
+-- You will find a number of other versions of this protocol in this
+-- collection of example files: at least in chapter8, chapter12 and
+-- chapter14.  There are also other communication protocol files in
+-- chapter12 (where the most satisfactory model of fault tolerance is
+-- developed).
+
+-- CHANNELS and DATA TYPES
+-- left and right are the external input and output, which we set to
+-- one-bit.  a and b carry a tag and a data value.
+-- c and d carry an acknowledgement tag.  In this protocol tags are bits.
+
+DATA = {0,1}  -- in a data-independent program, where nothing is done to
+              -- or conditional on data, this is sufficient to establish
+              -- correctness
+TAG = {0,1}   -- the alternating bits.
+
+channel left,right:DATA
+channel a,b:TAG.DATA
+channel c,d:TAG
+
+-- The overall specification we want to meet is that of a buffer.  The
+-- most nondeterministic (left-to-right) buffer with size bounded by N is
+-- given by BUFF(<>), where
+
+BUFF(s) = if (null(s)) then (left?x -> BUFF(<x>))
+          else  ((right!(head(s)) -> BUFF(tail(s)))
+                 [](STOP |~| (if ((#s)==N) then STOP
+                              else (left?x -> BUFF(s^<x>)))))
+
+-- For our purposes we will set
+
+N = 3  -- since this example does not introduce more buffering than this.
+
+SPEC = BUFF(<>)
+
+-- The protocol is designed to work in the presence of lossy channels.
+-- We specify here channels which must transmit one out of any L=3 values, but 
+-- any definition would work provided it maintains order and does not lose
+-- an infinite sequence of values.  The only difference would evidence itself
+-- in the size of the state-space!
+
+L = 3
+
+E(n) = a?tag?data -> (if (n==0) then (b!tag!data -> E(L-1))
+                        else ((b!tag!data -> E(L-1)) |~|  E(n-1)))
+
+F(n) = c?tag -> (if (n==0) then (d!tag -> F(L-1))
+                        else ((d!tag -> F(L-1)) |~|  F(n-1)))
+
+-- Increasing L makes this definition less deterministic.  
+
+-- The implementation of the protocol consists of a sender process and
+-- receiver process, linked by E and F above.  
+-- In the text, the medium processes considered have the additional
+-- ability to duplicate messages boundedly.  It easy to extend this
+-- file to that case, and this is left as an exercise.
+
+-- The sender process is parameterised by the current value it tries to send
+-- out, which may be null in which case it does not try to send it,  but
+-- instead accepts a new one from channel left.
+
+Null=99  -- any value not in DATA
+
+SEND(v,bit) = (if (v == Null) then 
+                (left?x -> SEND(x,(1-bit))) else 
+                (a!bit!v -> SEND(v,bit)))
+              [](d?ack ->(if (ack==bit) then SEND(Null,bit) 
+                        else SEND(v,bit)))
+
+-- Initially the data value is Null & bit=1 so the first value input gets bit=0.
+
+SND = SEND(Null,1)
+
+-- The basic part of the receiver takes in messages, sends acknowledgements,
+-- and transmits messages to the environment.  REC(b) is a process that
+-- will always accept a message or send an acknowledgement, save that it
+-- will not do so when it has a pending message to transmit to
+-- the environment.  
+
+REC(bit) = b?tag?data -> (if (tag==bit) then right!data -> REC(1-bit)
+                                      else REC(bit))
+           [] (c!(1-bit) -> REC(bit))
+               
+-- The first message to be output has tag 0, and there is no pending
+-- message.
+
+DRCV = REC(0)
+
+-- If this receiver is placed in the system, there is the danger of
+-- livelock, or divergence, if an infinite sequence of acknowledgements is
+-- transmitted by REC and received by SEND without the next message being
+-- transmitted, as is possible.  Alternatively, a message can be transmitted
+-- and received infinitely without being acknowledged.
+-- Thus, while the following system is
+-- partially correct, it can diverge:
+
+DIVSYSTEM = SND[| {|a,d|} |]((E(L-1)|||F(L-1))[| {|b,c|} |]DRCV)\{|a,b,c,d|}
+
+assert SPEC [T= DIVSYSTEM
+assert SPEC [FD= DIVSYSTEM
+
+-- We can avoid divergence by preventing the receiver acknowledging or
+-- receiving infinitely without doing the other.  This can be done by
+-- putting it in parallel with any process which allows these actions
+-- in such a way as to avoid these infinitely unfair sequences.  In fact,
+-- the receiver may choose one of the two to do rather than give the
+-- choice as above.  Examples that will work are:
+
+ALT = b?bit?data -> c?bit -> ALT
+
+-- simple alternation
+
+LIMITc(M,n) = b?bit?data -> LIMITb(M,1)
+             [](if (n==M) then STOP else (c?bit -> LIMITc(M,(n+1))))
+
+LIMITb(M,n) = c?bit -> LIMITc(M,1)
+             [](if (n==M) then STOP else (b?bit?data -> LIMITb(M,(n+1))))
+
+LIMIT(M) = (c?bit -> LIMITc(M,1))[](b?bit?data -> LIMITb(M,1))
+
+-- gives the environment the choice, provided there is no run of more
+-- than M of either.
+
+NDC(M,n) = (if (n==0) then (c?bit -> NDC(M,1))
+            else if (n==M) then (b?bit?data -> NDC(M,(M-1)))
+            else ((c?bit -> NDC(M,(n+1))) |~| (b?bit?data -> NDC(M,(n-1)))))
+
+-- chooses nondeterministically which to allow, within provided the totals
+-- of b's and c's do not differ too much.
+
+-- Modified receiver processes, with small values for the constants, are
+
+RCVA = DRCV[|{|b,c|}|]ALT
+RCVL = DRCV[|{|b,c|}|]LIMIT(3)
+RCVN = DRCV[|{|b,c|}|]NDC(4,2)
+ 
+-- and the respective systems to check against SPEC:
+
+ASYSTEM = SND[|{|a,d|}|]((E(L-1)|||F(L-1))[|{|b,c|}|]RCVA)\{|a,b,c,d|}
+
+LSYSTEM = SND[|{|a,d|}|]((E(L-1)|||F(L-1))[|{|b,c|}|]RCVL)\{|a,b,c,d|}
+
+NSYSTEM = SND[|{|a,d|}|]((E(L-1)|||F(L-1))[|{|b,c|}|]RCVN)\{|a,b,c,d|}
+
+-- We can now prove full refinement 
+
+assert SPEC [FD= ASYSTEM
+assert SPEC [FD= LSYSTEM
+assert SPEC [FD= NSYSTEM
+
+
+-- of course, one would not normally construct one's receiver as a composition
+-- of an algorithmic process and constraint in this way, but we now know that
+-- any receiver which refines RCVN (for example) will work
+
+RECimp(bit) = b?tag?data -> (if (tag==bit) then 
+                                         (right!data -> c!tag -> RECimp(1-bit))
+                                       else (c!tag -> RECimp(bit)))
+
+RCVimp=RECimp(0)
+
+-- You can check that RCVimp refines RCVN, which proves that the revised
+-- system below is correct.  This can, in this instance, be proved directly!
+
+SYSTEMimp = SND[|{|a,d|}|]((E(L-1)|||F(L-1))[|{|b,c|}|]RCVimp)\{|a,b,c,d|}
+
+assert SPEC [FD= SYSTEMimp
+
+-- Indeed, RCVimp actually equals (semantically) RCVA, and you can check
+-- that refinement either way.
+
+-- If you want to develop this example much further, perhaps by inserting
+-- a more interesting process in one or both channels, the state-space may
+-- grow uncomfortably large for a Full check (including absence of divergence).
+
+-- Any different channel definitions which satisfy
+
+-- outputs(tr)  subseq of  inputs(tr)  in the obvious sense;
+
+-- will not do an infinite sequence of inputs without an output;
+
+-- and refines 
+
+IorO(inp, outp) = inp?x -> IorO(inp,outp) |~| 
+                   (|~| x:events(outp) @ x -> IorO(inp,outp))
+
+-- (i.e., can always either input any value, or make an output).
+
+-- is substitutable for E and/or F.
+
+-- Note the relationship of the above statement to what is said
+-- in the text about the buffer tolerance of ABP.  It should be easy
+-- for you to try out the buffer tolerance claims by modifying the
+-- examples in this file.
+
+
+-- In fact, as observed in the text, all our divergence-free versions
+-- of the ABP are actually equivalent to COPY.  Therefore, like the
+-- MajSys example in chapter5-1.csp, we have an example of a process
+-- with much internal nondeterminism displaying a deterministic face to
+-- the world.
+","https://www.cs.ox.ac.uk/publications/books/concurrency/examples/bookexamples/
+
+@book{550448,
+author = {Roscoe, A. W.},
+title = {The  Theory and Practice of Concurrency},
+year = {1997},
+isbn = {0136744095},
+publisher = {Prentice Hall PTR},
+address = {USA},
+abstract = {From the Publisher:Since the introduction of Hoares' Communicating Sequential Processes notation, powerful new tools have transformed CSP into a practical way of describing industrial-sized problems. This book gives you the fundamental grasp of CSP concepts you'll need to take advantage of those tools.Part I provides a detailed foundation for working with CSP, using as little mathematics as possible. It introduces the ideas behind operational, denotational and algebraic models of CSP. Parts II and III go into greater detail about theory and practice. Topics include: parallel operators, hiding and renaming, piping and enslavement, buffers and communication, termination and sequencing, and semantic theory. Three detailed practical case studies are also presented.For anyone interested in modeling sequential processes.}
+}","Seminal work
+400+ citations
+Medium complexity
+Heavily commented
+Medium length
+Available csp file
+",,,,
+Bus System,"-- buses.csp
+--
+-- Simon Gay, Royal Holloway, January 1999
+--
+--
+
+channel board37A, alight37A, alight37B, 
+        board111A, alight111A, alight111B, 
+        pay70, pay90
+
+BUS37 = board37A -> (pay90 -> alight37B -> STOP
+                     [] alight37A -> STOP)
+
+BUS111 = board111A -> (pay70 -> alight111B -> STOP
+                      [] alight111A -> STOP)
+
+SERVICE = BUS37 |~| BUS111
+
+PASS = board37A -> pay90 -> alight37B -> STOP
+
+SYSTEM = SERVICE
+[
+{|board37A,alight37A,alight37B,board111A,alight111A,alight111B,pay70,pay90|}
+|| 
+{|board37A,alight37A,alight37B,board111A,alight111A,alight111B,pay70,pay90|}
+] PASS","https://www.cs.rhul.ac.uk/books/concurrency/course/index.html
+
+@book{555233,
+author = {Schneider, Steve},
+title = {Concurrent and Real Time Systems: The CSP Approach},
+year = {1999},
+isbn = {0471623733},
+publisher = {John Wiley \& Sons, Inc.},
+address = {USA},
+edition = {1st},
+abstract = {From the Publisher:The CSP approach has been widely used in the specification, analysis and verification of concurrent and real-time systems, and for understanding the particular issues that can arise when concurrency is present. It provides a language which enables specifications and designs to be clearly expressed and understood, together with a supporting theory which allows them to be analyzed and shown to be correct. This book supports advanced level courses on concurrency covering timed and untimed CSP. The first half introduces the language of CSP, the primary semantic models (traces, failures, divergences and infinite traces), and their use in the modelling, analysis and verification of concurrent systems. The second half of the book introduces time into the language, brings in the timed semantic model (timed failures) and finally presents the theory of timewise refinement which links the two halves together.Containing the following: -Exercises and solutions -Instructors resources - Example CSP programs to run on FDR and ProBe -Links to useful sitesPartial Contents: Part I: The Language of CSP; Sequential Processes; Concurrency; Abstraction and Control Flow; Part II: Analyzing Processes; Traces; Specification and Verification with Traces; Stable Failures; Specification and Verification with Failures; Failures, Divergences, and Infinite Traces; Part III: Introducing Time; The Timed Language; Timed transition systems; Part IV: Timed Analysis; Semantics of Timed CSP; Timed Specification and Verification; Timewise Refinement; Appendix A: Event-based Time; A.1 Standard CSP and $tock$; A.2 Translating from Timed CSP; A.3 Notes; Appendix B:Model-checking with FDR; B.1 Interacting with FDR; B.2 How FDR Checks Refinement; B.3 Machine readable CSP; Index of Processes.}
+}","Short and simple example
+Available csp file
+Book materials",,,,
+Level Crossing,"-- The level crossing example
+-- Originator: Simon Gay, Royal Holloway, January 1999
+-- Adapted by Steve Schneider, Royal Holloway, May 1999
+-- Given in the lecture slides accompanying the book 
+-- `Concurrent and Real Time Systems: the CSP Approach
+
+channel car, train : LOC
+channel gate : POS
+channel crash
+
+datatype LOC = approach | enter | leave
+
+datatype POS = raise | lower
+
+CR = car.approach -> car.enter -> C
+     [] train.approach -> train.enter -> T
+
+C = car.leave -> CR
+    [] train.approach -> train.enter -> CT
+
+T = train.leave -> CR
+    [] car.approach -> car.enter -> CT
+
+CT = crash -> STOP
+
+GATE = gate.lower -> gate.raise -> GATE
+       [] car.enter -> GATE
+
+CARS = car.approach -> car.enter -> car.leave -> CARS
+
+TRAINS = train.approach -> train.enter -> train.leave -> TRAINS
+
+ET = {| train |}
+
+EC = {| car |}
+
+EGC = {gate.raise, gate.lower, car.enter}
+
+EX = {crash}
+
+ES = {| train, car, gate, crash |}
+
+ETCC = {| train, car, crash |}
+
+ETCG = {| train, car, gate |}
+
+SYSTEM = ((CR [ETCC||EGC] GATE) [ES||EC] CARS ) [ES||ET] TRAINS
+
+SPEC = [] x : ETCG @ x -> SPEC
+
+assert SPEC [T= SYSTEM
+
+-- checking this assertion in FDR will check whether any sequence of events
+-- can lead to the event `crash', since performance of this event is the 
+-- only way that SPEC can fail to be met.  This can also be expressed as 
+-- follows:
+
+assert STOP [T= SYSTEM \ ETCG
+
+-- Since the system is not safe (as checking the above assertion 
+-- demonstrates), a controller is introduced:
+
+CONTROL = train.approach -> gate.lower -> 
+            train.enter -> train.leave -> gate.raise -> CONTROL
+          [] car.approach -> car.enter -> car.leave -> CONTROL
+
+SAFE_SYSTEM = SYSTEM [ES||ETCG] CONTROL
+
+assert SPEC [T= SAFE_SYSTEM
+
+assert STOP [T= SAFE_SYSTEM \ ETCG
+
+-- Finally, the specification which requires the activity of trains and 
+-- cars not to overlap at all, but allows any gate activity intermingled
+-- with car and train activity, will be given as SPEC0
+
+SPEC1 = [] x : {| gate |} @ x -> SPEC1
+
+SPEC2 = train.approach -> train.enter -> train.leave -> SPEC2
+        [] car.approach -> car.enter -> car.leave -> SPEC2
+
+SPEC0 = SPEC1 ||| SPEC2
+
+assert SPEC0 [T= SYSTEM
+
+assert SPEC0 [T= SAFE_SYSTEM","https://www.cs.rhul.ac.uk/books/concurrency/course/index.html
+
+@book{555233,
+author = {Schneider, Steve},
+title = {Concurrent and Real Time Systems: The CSP Approach},
+year = {1999},
+isbn = {0471623733},
+publisher = {John Wiley \& Sons, Inc.},
+address = {USA},
+edition = {1st},
+abstract = {From the Publisher:The CSP approach has been widely used in the specification, analysis and verification of concurrent and real-time systems, and for understanding the particular issues that can arise when concurrency is present. It provides a language which enables specifications and designs to be clearly expressed and understood, together with a supporting theory which allows them to be analyzed and shown to be correct. This book supports advanced level courses on concurrency covering timed and untimed CSP. The first half introduces the language of CSP, the primary semantic models (traces, failures, divergences and infinite traces), and their use in the modelling, analysis and verification of concurrent systems. The second half of the book introduces time into the language, brings in the timed semantic model (timed failures) and finally presents the theory of timewise refinement which links the two halves together.Containing the following: -Exercises and solutions -Instructors resources - Example CSP programs to run on FDR and ProBe -Links to useful sitesPartial Contents: Part I: The Language of CSP; Sequential Processes; Concurrency; Abstraction and Control Flow; Part II: Analyzing Processes; Traces; Specification and Verification with Traces; Stable Failures; Specification and Verification with Failures; Failures, Divergences, and Infinite Traces; Part III: Introducing Time; The Timed Language; Timed transition systems; Part IV: Timed Analysis; Semantics of Timed CSP; Timed Specification and Verification; Timewise Refinement; Appendix A: Event-based Time; A.1 Standard CSP and $tock$; A.2 Translating from Timed CSP; A.3 Notes; Appendix B:Model-checking with FDR; B.1 Interacting with FDR; B.2 How FDR Checks Refinement; B.3 Machine readable CSP; Index of Processes.}
+}","Medium length and complexity
+Available csp file
+Book materials",,,,
+Level Crossing (FDR),"
+-- crossing.csp
+
+-- Model of a level crossing gate for FDR: revised version
+-- Illustrating discrete-time modelling using untimed CSP
+
+-- Bill Roscoe, November 1992 with various revisions
+
+-- This is the system described in Section 14.3
+
+channel tock
+
+transparent normal
+
+-- The following are the communications between the controller process and
+-- the gate process
+
+datatype gatestates = godown | goup | up | down
+
+-- where we can think of the first two as being commands to it, and the
+-- last two as being confirmations from a sensor that they are up or down.
+
+channel gate:gatestates
+
+-- For reasons discussed below, we introduce a special error event:
+
+channel error
+
+-- To model the speed of trains, and also the separation of more than one
+-- trains, we divide the track into segments that the trains can enter or
+-- leave.
+
+datatype TRAINS = Thomas | Duncan
+
+N=5
+
+TRACKS = {0..N}
+
+-- Here, segment 0 represents theo outside world, and 1-4 actual track segments
+-- including the crossing, which is at
+
+GateSeg=N-1
+
+-- To make modular arithmetic convenient, we define
+
+
+channel enter,leave:TRAINS.TRACKS
+
+-- Trains are detected when they enter the first track segment by a sensor,
+-- which drives the controller, and are also detected by a second sensor
+-- when they leave.
+
+datatype sensorsig = in | out
+
+channel sensor:sensorsig
+
+--(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)(+)
+
+-- Untimed trains and tracks
+
+-- The following gives an untimed description of Train A on track segment j
+-- A train not currently in the domain of interest is given index 0.
+
+Train(A,j) =  enter.A.((j+1)%(N+1)) -> leave.A.j -> Train(A,(j+1)%(N+1))
+
+Trains = Train(Thomas,0) ||| Train(Duncan,0)
+
+-- The real track segments can be occupied by one train at a time, and each
+-- time a train enters segment 1 or leaves GateSeg the sensors fire.
+
+Track(j) = if j==1  then enter?A!j -> sensor.in -> Trackf(A,j) 
+                    else enter?A!j -> Trackf(A,j)
+
+Trackf(A,j) = leave.A.j -> if j==GateSeg then sensor.out -> Track(j)
+                                         else Track(j)
+
+-- Like the trains, the untimed track segments do not communicate with 
+-- each other
+
+Tracks = ||| i:{1..N} @ Track(i)
+
+-- And we can put together the untimed network, noting that since there is
+-- no process modelling the outside world there is no need to synchronise
+-- on the enter and leave events for this area.
+
+Network = Trains [|diff({|enter,leave|},{enter.A.0,leave.A.0 | A <- TRAINS})|] 
+          Tracks
+
+--##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=##=
+
+-- Speed assumptions on trains
+
+-- We make assumptions about the speed of trains by placing (uniform)
+-- upper and lower ""speed limits"" on the track segments:
+
+MinTocksPerSeg = 3
+MaxTocksPerSeg = 6
+
+-- The speed regulators express bounds on the times between successive
+-- enter events.
+
+SpeedReg(j) = enter?A!j -> SpeedReg'(j,0)
+              [] tock -> SpeedReg(j)
+
+SpeedReg'(j,n) = n < MaxTocksPerSeg & tock -> SpeedReg'(j,n+1) 
+               [] n >= MinTocksPerSeg & enter?A!(j+1)%(N+1) -> SpeedReg(j)
+
+AlphaSR(j) = {tock,enter.A.j,enter.A.(j+1)%(N+1) | A <- TRAINS}
+
+SpeedRegs = || j:{1..N} @ [AlphaSR(j)] SpeedReg(j)
+
+-- The following pair of processes express the timing contraint that
+-- the two sensor events occur within one time unit of a train entering
+-- or leaving the domain.
+
+InSensorTiming = tock -> InSensorTiming
+               [] enter?A!1 -> sensor.in -> InSensorTiming
+
+OutSensorTiming = tock -> OutSensorTiming
+               [] leave?A!GateSeg -> sensor.out -> OutSensorTiming
+
+-- The timing constraints of the trains and sensors are combined into the
+-- network as follows, noting that no speed limits are used outside the domain:
+
+SensorTiming = InSensorTiming [|{|tock|}|] OutSensorTiming
+
+NetworkTiming = SpeedRegs [|{tock,enter.A.1 | A <- TRAINS}|]
+                SensorTiming
+
+TimedNetwork = (Network [|union({|enter,sensor|},
+                       {leave.A.GateSeg | A <- TRAINS})|] NetworkTiming)
+
+
+--=*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*==*=
+
+-- Gate and controller
+
+-- The last components of our system are a controller and the gate.
+-- The duties of the controller
+-- are to ensure that the gate is always down when there is a train on the
+-- gate, and that it is up whenever prudent.
+
+
+-- When the gate is up, the controller does nothing until the sensor
+-- detects an approaching train.  
+-- In this state, time is allowed to pass arbitrarily, except that the
+-- signal for the gate to go down is sent immediately on the occurrence of
+-- the sensor event.
+
+ControllerUp = sensor.in -> gate!godown -> ControllerGoingDown(1)
+               [] sensor.out -> ERROR
+               [] tock -> ControllerUp
+
+-- The two states ControllerGoingDown and ControllerDown 
+-- both keep a record of how many trains
+-- have to pass before the gate may go up.  Each time the sensor event
+-- occurs this count is increased.
+-- The count should not get greater than the number of trains that
+-- can legally be between the sensor and the gate (which equals the
+-- number of track segments).
+-- The ControllerGoingDown state comes to an end when the gate.down event occurs
+
+ControllerGoingDown(n) = (if GateSeg < n then ERROR 
+                         else sensor.in -> ControllerGoingDown(n+1) )
+                         []  gate.down -> ControllerDown(n)
+                         []  tock -> ControllerGoingDown(n)
+                         []  sensor.out -> ERROR
+              
+-- When the gate is down, the occurrence of a train entering its sector
+-- causes no alarm, and each time a train leaves the gate sector the
+-- remaining count goes down, or the gate is signalled to go up, as appropriate.
+-- Time is allowed to pass arbitrarily in this state, except that the
+-- direction to the gate to go up is instantaneous when due.
+
+ControllerDown(n) = (if GateSeg < n then ERROR
+                                   else sensor.in -> ControllerDown(n+1))
+                      [] sensor.out -> 
+                             (if n==1 then gate!goup -> ControllerGoingUp 
+                                      else ControllerDown(n-1))
+                      [] tock -> ControllerDown(n)
+
+-- When the gate is going up, the inward sensor may still fire, which means that
+-- the gate must be signalled to go down again.
+-- Otherwise the gate goes up after UpTime units.
+
+ControllerGoingUp =  gate!up -> ControllerUp
+                     [] tock -> ControllerGoingUp
+                     [] sensor.in -> gate!godown -> ControllerGoingDown(1)
+                     [] sensor.out -> ERROR
+
+
+-- Any process will be allowed to generate an error event, and since we will
+-- be establishing that these do not occur, we can make the successor process
+-- anything we please, in this case STOP.
+
+ERROR = error -> STOP
+
+
+-- The following are the times we assume here for the gate to go up
+-- and go down.  They represent upper bounds in each case.
+
+DownTime = 5
+UpTime = 2
+
+GateUp = gate.goup -> GateUp
+         [] gate.godown -> GateGoingDown(0)
+	 [] tock -> GateUp
+
+GateGoingDown(n) = gate.godown -> GateGoingDown(n)
+                   [] (if n == DownTime then gate.down -> GateDown
+		      else
+		      (gate.down -> GateDown
+		      |~| tock -> GateGoingDown(n+1)))
+
+GateDown = gate.godown -> GateDown
+         [] gate.goup -> GateGoingUp(0)
+	 [] tock -> GateDown
+
+GateGoingUp(n) = gate.goup -> GateGoingUp(n)
+                 [] gate.godown -> GateGoingDown(0)
+                 [] (if n == UpTime then gate.up -> GateUp
+	             else
+		      (gate.up -> GateUp
+		      |~| tock -> GateGoingUp(n+1)))
+
+GateAndController = (ControllerUp [|{|tock,gate|}|] normal(GateUp))
+
+System = TimedNetwork [|{|sensor,tock|}|] GateAndController
+
+--~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-~^-
+
+-- And now for specifications.  Since we have not synchronised on any
+-- error events, they would remain visible if they occurred.  Their
+-- absence can be checked with
+
+NoError = CHAOS(diff(Events,{error}))
+
+assert NoError [T= System
+
+-- This shows that none of the explicitly caught error conditions arises,
+-- but does not show that the system has the required safety property of
+-- having no train on the GateSeg when the gate is other than down.
+
+-- The required specifications are slight generalisations of those
+-- discussed in specs.csp; the following notation and development is
+-- consistent with that discussed there.
+
+SETBETWEENx(EN,DIS,C) = ([]x:EN @ x -> SETOUTSIDEx(DIS,EN,C))
+                        [] ([] x:DIS @ x -> SETBETWEENx(EN,DIS,C))
+
+SETOUTSIDEx(DIS,EN,C) = ([] c:C @ c -> SETOUTSIDEx(DIS,EN,C))
+                        [] ([] x: EN @ x -> SETOUTSIDEx(DIS,EN,C))
+                        [] ([] x:DIS @ x -> SETBETWEENx(EN,DIS,C))
+
+-- The above capture the sort of relationships we need between the
+-- relevant events.  If we want to stay within Failures-Divergence Refinement
+-- (as opposed to using CheckTrace subtly), we need to do the following to
+-- turn them into the conditions we need:
+
+EnterWhenDown = SETBETWEENx({gate.down},{gate.up,gate.goup,gate.godown},
+                            {enter.i.GateSeg | i <- TRAINS})
+                      [|{|gate, enter.i.GateSeg | i <- TRAINS|}|]CHAOS(Events)
+
+GateStillWhenTrain = SETOUTSIDEx({enter.i.GateSeg | i <- TRAINS},
+                                 {leave.i.GateSeg | i <- TRAINS},{|gate|})
+                    [|{|gate,enter.i.GateSeg,leave.i.GateSeg | i <- TRAINS|}|]
+                                     CHAOS(Events)
+
+-- So we can form a single safety spec by conjoining these:
+
+Safety = EnterWhenDown [|Events|] GateStillWhenTrain
+
+assert Safety [T= System
+
+-- An important form of liveness we have thus far ignored is that the clock
+-- is not stopped: for this it is sufficient that TimingConsistency
+-- refines TOCKS, where
+
+TOCKS = tock -> TOCKS
+
+-- The following is the set of events that we cannot rely on the environment
+-- not delaying.
+
+Delayable = {enter.A.1 | A <- TRAINS}
+
+TimingConsistency = ((System[|Delayable|]
+                     (normal(CHAOS(Delayable))))\diff(Events,{tock}))
+
+assert TOCKS [FD= TimingConsistency
+
+
+-- The Safety condition completely ignored time (although, if you change some
+-- of the timing constants enough, you will find it relies upon timing for
+-- it to be satisfied).  Because of the way we are modelling time, the
+-- main liveness constraint (that the gate is up when prudent) actually
+-- becomes a safety condition (one on traces).  It is the combination of this
+-- with the TOCKS condition above (asserting that time passes) that gives
+-- it the desired meaning.
+
+-- We will specify that when X units of time has passed since the last
+-- train left the gate, it must be open, and remain so until another
+-- train enters the system.  This is done by the following,  which monitor
+-- the number of trains in the system and, once the last has left, no
+-- more than X units of time pass (tock events) before the gate is up.  The
+-- gate is not permitted to go down until a train is in the system.
+
+LiveUp = tock -> LiveUp
+         [] enter?i!1 -> LiveBusy(1)
+
+LiveBusy(n) = tock -> LiveBusy(n)
+              [] enter?i!1 -> LiveBusy(if n < GateSeg then (n+1) else n)
+              [] leave?i!GateSeg ->(if n==1 then UpBefore(X) else LiveBusy(n-1))
+              [] gate?x -> LiveBusy(n)
+
+UpBefore(m) = (if m != 0 then (tock -> UpBefore(m-1)) else STOP)
+              [] gate?x -> (if x==up then LiveUp else UpBefore(m))
+              [] enter?i!1 -> LiveBusy(1)
+                 
+X = 5
+
+-- Initially the gate is up in the system, so the liveness condition takes
+-- this into account.
+
+GateLive = LiveUp [|{|tock,gate,enter.i.1,leave.i.GateSeg | i <- TRAINS|}|]
+           CHAOS(Events)
+
+assert GateLive [T= System
+","https://www.cs.ox.ac.uk/publications/books/concurrency/examples/bookexamples/
+
+@book{550448,
+author = {Roscoe, A. W.},
+title = {The  Theory and Practice of Concurrency},
+year = {1997},
+isbn = {0136744095},
+publisher = {Prentice Hall PTR},
+address = {USA},
+abstract = {From the Publisher:Since the introduction of Hoares' Communicating Sequential Processes notation, powerful new tools have transformed CSP into a practical way of describing industrial-sized problems. This book gives you the fundamental grasp of CSP concepts you'll need to take advantage of those tools.Part I provides a detailed foundation for working with CSP, using as little mathematics as possible. It introduces the ideas behind operational, denotational and algebraic models of CSP. Parts II and III go into greater detail about theory and practice. Topics include: parallel operators, hiding and renaming, piping and enslavement, buffers and communication, termination and sequencing, and semantic theory. Three detailed practical case studies are also presented.For anyone interested in modeling sequential processes.}
+}","Seminal work
+400+ citations
+Complex and medium length
+Available csp file
+",,,,
+Disk Scheduler,"channel dio: {0..150}
+channel ack: {1..2}
+channel shift, deq, empty, dint
+channel ds, dco, dci, enq, next, left, right, comm: {1..2}.{0..150}
+
+
+-- DQueue:  disk request queue (with 2-cell buffer)
+--
+--        enq!<item>    enqueue item
+--        deq          dequeue item, followed by:
+--          next?x       next item returned, or
+--          empty         empty queue indication
+
+CELL = left?x.y -> shift -> right!x.y -> CELL
+
+BUFF = ((CELL[[right<-comm]]) [|{|comm|}|] (CELL[[left<-comm]]))\{|comm|}
+
+DQueue = (DQ(0) [|{|left, right, shift|}|] BUFF)\{|left, right, shift|}
+
+DQ(i) = enq?x.y -> (left!x.y -> shift-> DQ(i+1))
+           [] deq -> (if (i==0) then empty -> DQ(0) 
+                              else X(i))
+
+X(i) = right?y.z -> (next!y.z -> DQ(i-1))
+     [] shift -> X(i)
+
+
+-- DCtrl:  disk controller
+--
+--        dci!cl.blk        staright operation on block <blk> for client <cl>
+--        dco?cl.blk        operation finished
+
+DCtrl = dci?i.blk -> dio!blk -> dint -> dco!i.blk -> DCtrl
+
+
+-- Disk:  disk drive (simulated)
+--
+--        dio!blk        perform disk i/o on block blk
+--        dint       disk interrupt signalled
+
+Disk =  dio?blk -> dint -> Disk
+
+
+-- DSched:  disk scheduler
+--
+--        ds!cl.blk        client <cl> requests operation on block <blk> 
+--        ack.cl     client's operation finished
+
+DSched = DS_idle
+
+DS_idle = ds?cl.blk -> dci!cl.blk -> DS_busy
+
+DS_busy = dco?cl.blk -> (ack.cl -> DS_check)
+            [] ds?cl.blk -> enq!cl.blk -> DS_busy
+
+DS_check = deq -> (empty -> DS_idle
+                     [] next?cl.blk -> dci!cl.blk -> DS_busy)
+                         
+
+-- DSS:  disk server subsystem
+
+DSS = (DSched [|{|enq,deq,next,empty|}|] DQueue)
+          [|{|dci,dco|}|]
+      (DCtrl [|{|dio,dint|}|] Disk)
+
+
+-- Test Case Description
+
+C(1) = ds!1.100 -> ack.1->SKIP
+
+C(2) = ds!2.150 -> ack.2->SKIP
+
+Test(i) = (if i>0 then ((C(1) ||| C(2)); Test(i-1)) else STOP)
+
+SYS = (DSS [|{|ds,ack.1,ack.2|}|]Test(10000)
+","@INPROCEEDINGS{1210108,
+  author={Gardner, W.B.},
+  booktitle={First ACM and IEEE International Conference on Formal Methods and Models for Co-Design, 2003. MEMOCODE '03. Proceedings.}, 
+  title={Bridging CSP and C++ with selective formalism and executable specifications}, 
+  year={2003},
+  volume={},
+  number={},
+  pages={237-245},
+  keywords={Computer languages;Hardware;Communication system control;Automatic control;Spine;Concurrent computing;Information science;Computational modeling;Formal verification;Control systems},
+  doi={10.1109/MEMCOD.2003.1210108}}
+","Well-documented
+20+ paper citations
+CSP++ Source
+Medium length and complexity",,,,
+Peterson Mutual Exclusion,"-- Peterson's Algorithm in CSP: version 1
+--
+-- Simon Gay, Royal Holloway, January 1999
+--
+
+channel p1setflag1, p1resetflag1, p2setflag1, p2resetflag1,
+        p1gettrueflag1, p1getfalseflag1, p2gettrueflag1, p2getfalseflag1,
+        p1setflag2, p1resetflag2, p2setflag2, p2resetflag2,
+        p1gettrueflag2, p1getfalseflag2, p2gettrueflag2, p2getfalseflag2,
+        p1set1turn, p1set2turn, p2set1turn, p2set2turn,
+        p1get1turn, p1get2turn, p2get1turn, p2get2turn,
+        p1enter, p1critical, p1leave,
+        p2enter, p2critical, p2leave
+
+FLAG1 = FLAG1FALSE
+FLAG1FALSE =  p1getfalseflag1 -> FLAG1FALSE
+           [] p2getfalseflag1 -> FLAG1FALSE
+           [] p1setflag1 -> FLAG1TRUE
+           [] p2setflag1 -> FLAG1TRUE
+           [] p1resetflag1 -> FLAG1FALSE
+           [] p2resetflag1 -> FLAG1FALSE
+FLAG1TRUE  =  p1gettrueflag1 -> FLAG1TRUE
+           [] p2gettrueflag1 -> FLAG1TRUE
+           [] p1resetflag1 -> FLAG1FALSE
+           [] p2resetflag1 -> FLAG1FALSE
+           [] p1setflag1 -> FLAG1TRUE
+           [] p2setflag1 -> FLAG1TRUE
+
+FLAG2 = FLAG2FALSE
+FLAG2FALSE =  p1getfalseflag2 -> FLAG2FALSE
+           [] p2getfalseflag2 -> FLAG2FALSE
+           [] p1setflag2 -> FLAG2TRUE
+           [] p2setflag2 -> FLAG2TRUE
+           [] p1resetflag2 -> FLAG2FALSE
+           [] p2resetflag2 -> FLAG2FALSE
+FLAG2TRUE  =  p1gettrueflag2 -> FLAG2TRUE
+           [] p2gettrueflag2 -> FLAG2TRUE
+           [] p1resetflag2 -> FLAG2FALSE
+           [] p2resetflag2 -> FLAG2FALSE
+           [] p1setflag2 -> FLAG2TRUE
+           [] p2setflag2 -> FLAG2TRUE
+
+TURN = TURNONE
+TURNONE =  p1get1turn -> TURNONE
+        [] p2get1turn -> TURNONE
+        [] p1set1turn -> TURNONE
+        [] p2set1turn -> TURNONE
+        [] p1set2turn -> TURNTWO
+        [] p2set2turn -> TURNTWO
+TURNTWO =  p1get2turn -> TURNTWO
+        [] p2get2turn -> TURNTWO
+        [] p1set1turn -> TURNONE
+        [] p2set1turn -> TURNONE
+        [] p1set2turn -> TURNTWO
+        [] p2set2turn -> TURNTWO
+
+P1 = p1setflag1 -> p1set2turn -> P1WAIT
+
+P1WAIT =  p1gettrueflag2 -> (p1get2turn -> P1WAIT
+                            [] p1get1turn -> P1ENTER)
+       [] p1getfalseflag2 -> P1ENTER
+
+P1ENTER = p1enter -> p1critical -> p1leave -> p1resetflag1 -> P1
+
+P2 = p2setflag2 -> p2set1turn -> P2WAIT
+
+P2WAIT =  p2gettrueflag1 -> (p2get1turn -> P2WAIT
+                            [] p2get2turn -> P2ENTER)
+       [] p2getfalseflag1 -> P2ENTER
+
+P2ENTER = p2enter -> p2critical -> p2leave -> p2resetflag2 -> P2
+
+aP1 = {| p1setflag1,p1resetflag1,p1gettrueflag1,p1getfalseflag1,
+         p1setflag2,p1resetflag2,p1gettrueflag2,p1getfalseflag2,
+         p1set1turn,p1set2turn,p1get1turn,p1get2turn,
+         p1enter,p1critical,p1leave |}
+
+aP2 = {| p2setflag1,p2resetflag1,p2gettrueflag1,p2getfalseflag1,
+         p2setflag2,p2resetflag2,p2gettrueflag2,p2getfalseflag2,
+         p2set1turn,p2set2turn,p2get1turn,p2get2turn,
+         p2enter,p2critical,p2leave |}
+
+aF1 = {| p1setflag1,p1resetflag1,p1gettrueflag1,p1getfalseflag1,
+         p2setflag1,p2resetflag1,p2gettrueflag1,p2getfalseflag1 |}
+
+aF2 = {| p1setflag2,p1resetflag2,p1gettrueflag2,p1getfalseflag2,
+         p2setflag2,p2resetflag2,p2gettrueflag2,p2getfalseflag2 |}
+
+aT  = {| p1set1turn,p1set2turn,p1get1turn,p1get2turn,
+         p2set1turn,p2set2turn,p2get1turn,p2get2turn |}
+
+PROCS = P1 [ aP1 || aP2 ] P2
+
+FLAGS = FLAG1 [ aF1 || aF2 ] FLAG2
+
+VARS = FLAGS [ union(aF1,aF2) || aT ] TURN
+
+SYSTEM = PROCS [ union(aP1,aP2) || union(union(aF1,aF2),aT) ] VARS","https://www.cs.ox.ac.uk/publications/books/concurrency/examples/bookexamples/
+
+@book{550448,
+author = {Roscoe, A. W.},
+title = {The  Theory and Practice of Concurrency},
+year = {1997},
+isbn = {0136744095},
+publisher = {Prentice Hall PTR},
+address = {USA},
+abstract = {From the Publisher:Since the introduction of Hoares' Communicating Sequential Processes notation, powerful new tools have transformed CSP into a practical way of describing industrial-sized problems. This book gives you the fundamental grasp of CSP concepts you'll need to take advantage of those tools.Part I provides a detailed foundation for working with CSP, using as little mathematics as possible. It introduces the ideas behind operational, denotational and algebraic models of CSP. Parts II and III go into greater detail about theory and practice. Topics include: parallel operators, hiding and renaming, piping and enslavement, buffers and communication, termination and sequencing, and semantic theory. Three detailed practical case studies are also presented.For anyone interested in modeling sequential processes.}
+}","Medium length and complexitry
+Book material
+Available csp file
+90+ citations",,,,
+Microwave,"channel userDoorClosed, userPushButton1, userPushButton2, userDoorOpen1, userDoorOpen2
+channel ovenTimeOut 
+channel e3, e4, e7, e8, e11, e12, e15, e16, e19, e20, e21, e24, e25, e26 
+
+MAIN =  Oven [ OvenA || Alph1 ]
+        	(Door [DoorA || Alph2 ]
+         		(Light [ LightA || Alph3 ]
+          		(Button [ ButtonA || Alph4 ]
+          			(Powertube [ PowertubeA || BeeperA ] Beeper))))
+
+Alph4 = union(PowertubeA,BeeperA)
+Alph3 = union(union(ButtonA,PowertubeA),BeeperA)
+Alph2 = union(union(union(LightA,ButtonA),PowertubeA),BeeperA)
+Alph1 = union(union(union(union(DoorA,LightA),ButtonA),PowertubeA),BeeperA)
+Alpha = union(union(union(union(union(OvenA,DoorA),LightA),ButtonA),PowertubeA),BeeperA)
+
+OvenA = {|e4, e8, e12, e15, e16, e20, e21, e25, e26, userDoorClosed, userDoorOpen1, userDoorOpen2, userPushButton1, userDoorOpen2, ovenTimeOut|}
+DoorA = {|e3, e11, e19, userDoorClosed, userDoorOpen1, userDoorOpen2|}
+LightA = {|e3, e4, e7, e8, e11, e12, e24, userDoorOpen1, userDoorClosed, userPushButton1, ovenTimeOut|}
+ButtonA = {|e3, e4, e11, e12, e15, e19, e20, userDoorOpen1, userDoorOpen2, userDoorClosed, userPushButton1, userPushButton2|}
+PowertubeA = {|e8, e7, e19, e20, e24, userDoorOpen2, userPushButton1, ovenTimeOut|}
+BeeperA = {|e24, ovenTimeOut|}
+
+Oven = OvenOpen
+Door = DoorInit
+Light = LightInit
+Button = ButtonInit
+Powertube = PowertubeInit
+Beeper = BeeperInit
+
+
+OvenOpen = userDoorClosed -> e4 -> OvenIdle
+
+OvenIdle = userPushButton1 -> e8 -> OvenCooking 
+	   [] userDoorOpen1 -> e12 -> OvenOpen
+
+OvenCooking = userPushButton2 -> e15 -> OvenExtraMin 
+           [] userDoorOpen2 -> e20 -> OvenCookStop  
+           [] ovenTimeOut -> e25 -> OvenCookFinish
+        
+OvenExtraMin = e16 -> OvenCooking
+
+OvenCookStop = e21 -> OvenOpen
+
+OvenCookFinish = e26 -> OvenIdle
+
+
+DoorInit = userDoorClosed -> DoorClosed
+
+DoorClosed = e3 -> (userDoorOpen1 -> DoorOpen
+				 [] userDoorOpen2 -> DoorOpen)
+
+DoorOpen = e19 -> userDoorClosed -> DoorClosed 
+	   [] e11 -> userDoorClosed -> DoorClosed
+
+LightInit = userDoorClosed -> e3 -> LightOff
+
+LightOff = e4 -> (userPushButton1 -> e7 -> LightOn 
+				[] userDoorOpen1 -> e11 -> LightOn)  
+        [] e24 -> (userPushButton1 -> e7 -> LightOn 
+        			[] userDoorOpen1 -> e11 -> LightOn)
+           
+LightOn = e8 -> (ovenTimeOut -> LightOff 
+				[] LightInit) 
+       [] e12 -> userDoorClosed -> e3 -> LightOff
+      
+      
+ButtonInit = userDoorClosed -> e3 -> ButtonEnabled
+
+ButtonEnabled = e4 -> (userDoorOpen1 -> e11 -> ButtonDisabled 
+				[] userPushButton1 -> ButtonPushed)
+
+ButtonDisabled = e12 -> ButtonInit [] e20 -> ButtonInit
+
+ButtonPushed = e7 -> ((userPushButton2 -> ButtonPushed 
+					[] userDoorOpen2 -> e19 -> ButtonDisabled)
+           		[] (userDoorOpen1 -> e11 -> ButtonDisabled 
+           			[] userPushButton1 -> ButtonPushed))
+           [] e15 -> ((userPushButton2 -> ButtonPushed 
+           			[] userDoorOpen2 -> e19 -> ButtonDisabled)
+         			[] (userDoorOpen1 -> e11 -> ButtonDisabled 
+         				[] userPushButton1 -> ButtonPushed))      
+
+
+PowertubeInit = userPushButton1 -> e7 -> PowertubeEnergised
+
+PowertubeEnergised = e8 -> (userDoorOpen2 -> e19 -> PowertubeOff 
+						[] ovenTimeOut -> PowertubeOff)
+
+PowertubeOff = e20 -> PowertubeInit 
+			[] e24 -> PowertubeInit
+
+
+BeeperInit = ovenTimeOut -> e24 -> BeeperSounded
+
+BeeperSounded = e25 -> BeeperInit
+
+
+EventSet = {| userDoorOpen1, userDoorOpen2, userDoorClosed, userPushButton1, userPushButton2 |}
+
+Others = diff(Alpha,EventSet)
+
+Q = userPushButton1 -> Q
+	[] userP ushButton2 -> Q
+	[] userDoorOpen1 -> P
+	[] userDoorOpen2 -> P
+
+P = userDoorClosed -> Q
+
+Safety = P ||| CHAOS(Others)
+
+","@InProceedings{10.1007/978-3-540-24756-2_9,
+author=""Winter, Kirsten"",
+editor=""Boiten, Eerke A.
+and Derrick, John
+and Smith, Graeme"",
+title=""Formalising Behaviour Trees with CSP"",
+booktitle=""Integrated Formal Methods"",
+year=""2004"",
+publisher=""Springer Berlin Heidelberg"",
+address=""Berlin, Heidelberg"",
+pages=""148--167"",
+abstract=""Behaviour Trees is a novel approach for requirements engineering. It advocates a graphical tree notation that is easy to use and to understand. Individual requirements are modelled as single trees which later on are integrated into a model of the system as a whole. We develop a formal semantics for a subset of Behaviour Trees using CSP. This work, on one hand, provides tool support for Behaviour Trees. On the other hand, it builds a front-end to a subset of the CSP notation and gives CSP users a new modelling strategy which is well suited to the challenges of requirements engineering."",
+isbn=""978-3-540-24756-2""
+}","Well-documented
+20+ paper citations
+Medium length and complexity",,,,
+Read-Write,"-- The classic Readers/Writers Example model multiple processes accessing a shared file.
+
+-----------The Model-----------------------------------
+M = 1000
+
+transparent sbisim
+
+channel startwrite, stopwrite, startread, stopread, error
+AlphaReadWrite = {startwrite, stopwrite, startread, stopread}
+Writer 	= startwrite -> stopwrite -> Writer
+
+Writers(1) = Writer
+Writers(n) = if n%2 == 1 then sbisim(Writer ||| Writers(n-1))
+                        else sbisim(Writers(n/2) ||| Writers(n/2))
+
+Reader 	= startread -> stopread -> Reader
+Readers(1) = Reader
+Readers(n) = if n%2 == 1 then sbisim(Reader ||| Readers(n-1))
+                        else sbisim(Readers(n/2) ||| Readers(n/2))
+
+Reading(i) 	= i == 0 & Controller []
+	 	 	  i == M & stopread -> Reading(i-1) []
+	 	 	  i > 0 and i < M & (startread -> Reading(i+1) [] stopread -> Reading(i-1))
+
+Controller 	= startread -> Reading(1)
+	 	 	 	 [] stopread -> error -> Controller
+	 	 	 	 [] startwrite -> (stopwrite -> Controller [] stopread -> error -> Controller)
+
+ReadersWriters = Controller [|AlphaReadWrite|] (Readers(M) ||| (Writers(M)||| STOP))
+
+Implementation 	= ReadersWriters \ AlphaReadWrite
+Specification 	= error -> Specification
+
+
+------The Properties----------------------------------
+assert Specification [T= Implementation
+","www.comp.nus.edu.sg/~pat/compare        
+
+@inproceedings{10.1007/978-3-642-34281-3_27,
+author = {Shi, Ling and Liu, Yang and Sun, Jun and Dong, Jin Song and Carvalho, Gustavo},
+title = {An analytical and experimental comparison of CSP extensions and tools},
+year = {2012},
+isbn = {9783642342806},
+publisher = {Springer-Verlag},
+address = {Berlin, Heidelberg},
+url = {https://doi.org/10.1007/978-3-642-34281-3_27},
+doi = {10.1007/978-3-642-34281-3_27},
+abstract = {Communicating Sequential Processes (CSP) has been widely applied to modeling and analyzing concurrent systems. There have been considerable efforts on enhancing CSP by taking data and other system aspects into account. For instance, CSPM combines CSP with a functional programming language whereas CSP# integrates high-level CSP-like process operators with low-level procedure code. Little work has been done to systematically compare these CSP extensions, which may have subtle and substantial differences. In this paper, we compare CSPM and CSP# not only on their syntax, but also operational semantics as well as their supporting tools such as FDR, ProB, and PAT. We conduct extensive experiments to compare the performance of these tools in different settings. Our comparison can be used to guide users to choose the appropriate CSP extension and verification tool based on the system characteristics.},
+booktitle = {Proceedings of the 14th International Conference on Formal Engineering Methods: Formal Methods and Software Engineering},
+pages = {381–397},
+numpages = {17},
+location = {Kyoto, Japan},
+series = {ICFEM'12}
+}","Tool evaluation
+Direct source available
+Short but complex
+",,,,
+simple,"channel a, b, c, d
+channel hidden
+channel e : {1,0}
+
+
+Proc1 = a -> b -> SKIP
+
+Proc2 = a -> (b -> SKIP [] c -> SKIP)
+
+Proc3 = (b -> SKIP [] c -> SKIP)
+
+RecurrA = a -> RecurrB
+RecurrB = b -> RecurrA
+
+LoopA = a -> LoopB
+LoopB = b -> LoopC
+LoopC = c -> LoopA
+
+LoopHide = LoopA \{|b|}
+
+E(num) =  e.num -> SKIP
+
+assert Proc1 :[has trace]: <a, b>
+assert Proc1 :[has trace]: <a, b, c>
+assert Proc1 :[has trace]: <a, d, b, c>
+
+assert Proc2 :[has trace]: <a, b>
+assert Proc2 :[has trace]: <a, b, c>
+assert Proc2 :[has trace]: <a, d, b, c>
+
+assert Proc3 :[has trace]: <a, b>
+assert Proc3 :[has trace]: <a, b, c>
+assert Proc3 :[has trace]: <a, d, b, c>
+
+ALPHABET_TEST = (a -> hidden -> c -> SKIP) [] (b -> c -> SKIP)
+ALPHABET_TEST2 = (a -> hidden -> hidden -> c -> SKIP) [] (b -> c -> SKIP)
+
+assert ALPHABET_TEST :[divergence free]:
+assert ALPHABET_TEST :[deterministic]:
+assert ALPHABET_TEST\diff(Events, {|a, b, c|}) :[divergence free]:
+assert ALPHABET_TEST\diff(Events, {|a, b, c|}) :[deterministic]:","@misc{luckcuck2025varanusruntimeverificationcsp,
+      title={Varanus: Runtime Verification for CSP}, 
+      author={Matt Luckcuck and Angelo Ferrando and Fatma Faruq},
+      year={2025},
+      eprint={2506.14426},
+      archivePrefix={arXiv},
+      primaryClass={cs.LO},
+      url={https://arxiv.org/abs/2506.14426}, 
+}","Short and Simple
+Available csp file
+Recent work
+",,,,
+Worst-Case State Machine,"-- Manually building a Worst-Case State Machine (WCST)
+-- Now with 10 events and 10 states
+channel a, b, c, d, e
+channel f, g, h, i, j
+
+
+ProcA = 
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+
+ProcB =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+ 
+ProcC =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcD =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcE =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcF =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcG =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcH =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcI =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+ProcJ =
+a -> ProcA
+[]
+b -> ProcB
+[]
+c -> ProcC
+[]
+d -> ProcD
+[]
+e -> ProcE
+[]
+f -> ProcF
+[]
+g -> ProcG
+[]
+h -> ProcH
+[]
+i -> ProcI
+[]
+j -> ProcJ
+
+
+WCST = ProcA -- Main Process, starts the recursion in ProcA
+
+assert WCST; RUN(Events) :[deadlock free]:
+assert WCST :[deterministic]:
+assert WCST :[divergence free]:","@misc{luckcuck2025varanusruntimeverificationcsp,
+      title={Varanus: Runtime Verification for CSP}, 
+      author={Matt Luckcuck and Angelo Ferrando and Fatma Faruq},
+      year={2025},
+      eprint={2506.14426},
+      archivePrefix={arXiv},
+      primaryClass={cs.LO},
+      url={https://arxiv.org/abs/2506.14426}, 
+}","Medium length and Simple
+Available csp file
+Recent work
+",,,,
+FibGen,"channel out,gen: {0..9999}
+FibGen(N,M) = if M<10000 then out!M -> FibGen(M,N+M) else STOP
+Take(n) = if n>1 then out?_ -> Take(n-1)
+else out?x -> gen!x -> STOP
+MAIN = FibGen(0,1) [| {| out |} |] Take(5)","@InProceedings{10.1007/978-3-540-88194-0_18,
+author=""Leuschel, Michael
+and Fontaine, Marc"",
+editor=""Liu, Shaoying
+and Maibaum, Tom
+and Araki, Keijiro"",
+title=""Probing the Depths of CSP-M: A New fdr-Compliant Validation Tool"",
+booktitle=""Formal Methods and Software Engineering"",
+year=""2008"",
+publisher=""Springer Berlin Heidelberg"",
+address=""Berlin, Heidelberg"",
+pages=""278--297"",
+abstract=""We present a new animation and model checking tool for CSP. The tool covers the CSP-M language, as supported by existing tools such as fdr and probe. Compared to those tools, it provides visual feedback in the source code, has an LTL model checker and can be used for combined CSP || B specifications. During the development of the tool some intricate issues were uncovered with the CSP-M language. We discuss those issues, and provide suggestions for improvement. We also explain how we have ensured conformance with fdr, by using fdr itself to validate our tool's output. We also provide empirical evidence on the performance of our tool compared to fdr, showing that it can be used on industrial-strength specifications."",
+isbn=""978-3-540-88194-0""
+}","Short and simple
+Well-documented
+20+ citations",,,,
+Astronaut Mission,"-- Astronaut2missions.csp
+--
+--
+-- In this specification there are two processes (ASTRONAUT and NASA) 
+-- executed in parallel and synchronized on event {|success|}. 
+-- Process ASTRONAUT represents an astronaut that participates in two missions after she graduates.
+-- Process NASA represents the NASA who gives her a medal when she concludes succesfully a mission. 
+
+channel graduate,mission1,mission2,success,fail,medal
+
+MAIN = ASTRONAUT [|{|success|}|] NASA
+
+ASTRONAUT = graduate -> mission1 -> MISSION1
+
+MISSION1 = mission1 -> ((fail -> MISSION2) [] (success -> MISSION2))
+
+MISSION2 = mission2 -> ((fail -> STOP) [] (success -> STOP))
+
+NASA = success -> medal -> NASA","@article{LLORENS2012110,
+title = {Generating a Petri net from a CSP specification: A semantics-based method},
+journal = {Advances in Engineering Software},
+volume = {50},
+pages = {110-130},
+year = {2012},
+note = {CIVIL-COMP},
+issn = {0965-9978},
+doi = {https://doi.org/10.1016/j.advengsoft.2012.02.006},
+url = {https://www.sciencedirect.com/science/article/pii/S0965997812000373},
+author = {M. Llorens and J. Oliver and J. Silva and S. Tamarit},
+keywords = {Concurrent programming, CSP, Petri nets, Semantics, Traces, Specification and Simulation},
+abstract = {The specification and simulation of complex concurrent systems is a difficult task due to the intricate combinations of message passing and synchronizations that can occur between the components of the system. Two of the most extended formalisms used to specify, verify and simulate such kind of systems are CSP and the Petri nets. This work introduces a new technique that allows us to automatically transform a CSP specification into an equivalent Petri net. The transformation is formally defined by instrumenting the operational semantics of CSP. Because the technique uses a semantics-directed transformation, it produces Petri nets that are closer to the CSP specification and thus easier to understand. This result is interesting because it allows CSP developers not only to graphically animate their specifications through the use of the equivalent Petri net, but it also allows them to use all the tools and analysis techniques developed for Petri nets.}
+}","Short and simple
+Available csp file
+",,,,
+Chemical Detector Bot - Detecting ,"Timed(OneStep) {
+
+-- channel Detecting_enteredV, Detecting_exitV : Detecting_SIDS
+
+-- declare clocks
+Detecting_Clocks = {}
+channel Detecting_clockReset -- no clocks declared
+
+-- declare deadlines
+channel Detecting_deadline : Detecting_TIDS.Signal
+
+-- compile waiting conditions
+
+Detecting_WC_enablerSet = {""dummy""}
+
+channel Detecting_WC : Detecting_WC_enablerSet.Bool
+
+Detecting_WCset = {  }
+
+Detecting_WCsync = {||}
+
+Detecting_WCresets = {||}
+
+
+
+Detecting_WaitingConditions = || (alpha, P) : Detecting_WCset @ [alpha] wbisim(P)
+
+CS_Detecting_CleanAir_sync = {|
+	Detecting_enter.y.x, 
+	Detecting_entered.y.x, 
+	Detecting_exit.y.x, 
+	Detecting_exited.y.x,
+	Detecting_enter.x.y, 
+	Detecting_entered.x.y, 
+	Detecting_exit.x.y, 
+	Detecting_exited.x.y |
+	x <- {""Detecting_CleanAir"",""Detecting_GasPresent""},
+	y <- {""Detecting_CleanAir""}
+|}
+
+
+
+S_Detecting_CleanAir = let
+	T_Detecting_t2	= Detecting_gas__!""Detecting_t2"" ->  (Detecting_exit!""Detecting_CleanAir""!""Detecting_CleanAir"" -> SKIP;
+						SKIP;Detecting_exited!""Detecting_CleanAir""!""Detecting_CleanAir"" -> SKIP;
+						Detecting_enter!""Detecting_CleanAir""!""Detecting_GasPresent"" -> Detecting_entered!""Detecting_CleanAir""!""Detecting_GasPresent"" ->
+						S_Detecting_CleanAir
+	)
+	
+
+	S_Detecting_CleanAir_execute(o__) = 
+	SKIP; 
+	Detecting_entered!o__!""Detecting_CleanAir"" ->
+	   (SKIP
+	   										; STOP /\ (
+	   											    T_Detecting_t2
+	   											    []
+	   											    Detecting_internal__?x:diff(Detecting_TIDS,{""__NULLTRANSITION__"",""Detecting_t2""}) ->
+	   											      Detecting_exit?y:diff(Detecting_SIDS,{""Detecting_CleanAir""})!""Detecting_CleanAir"" -> (
+	   											      	SKIP;
+	   											      	Detecting_exited!y!""Detecting_CleanAir"" -> SKIP);
+	   											      	S_Detecting_CleanAir
+	   											    [] Detecting_gas__?x:diff(Detecting_TIDS,{""__NULLTRANSITION__"",""Detecting_t2""}) ->
+	   											      Detecting_exit?y:diff(Detecting_SIDS,{""Detecting_CleanAir""})!""Detecting_CleanAir"" -> (
+	   											      	SKIP;
+	   											      	Detecting_exited!y!""Detecting_CleanAir"" -> SKIP);
+	   											      	S_Detecting_CleanAir
+	   											    [] Detecting_detect__?x:diff(Detecting_TIDS,{""__NULLTRANSITION__"",""Detecting_t2""})?x__ ->
+	   											      Detecting_exit?y:diff(Detecting_SIDS,{""Detecting_CleanAir""})!""Detecting_CleanAir"" -> (
+	   											      	SKIP;
+	   											      	Detecting_exited!y!""Detecting_CleanAir"" -> SKIP);
+	   											      	S_Detecting_CleanAir
+	   											    )
+	   										)
+within
+Detecting_enter?x:diff(Detecting_SIDS,{""Detecting_CleanAir""})!""Detecting_CleanAir"" -> ( 
+	S_Detecting_CleanAir_execute(x)) 
+CS_Detecting_GasPresent_sync = {|
+	Detecting_enter.y.x, 
+	Detecting_entered.y.x, 
+	Detecting_exit.y.x, 
+	Detecting_exited.y.x,
+	Detecting_enter.x.y, 
+	Detecting_entered.x.y, 
+	Detecting_exit.x.y, 
+	Detecting_exited.x.y |
+	x <- {""Detecting_CleanAir"",""Detecting_GasPresent""},
+	y <- {""Detecting_GasPresent""}
+|}
+
+
+
+S_Detecting_GasPresent = let
+	T_Detecting_t3	= Detecting_internal__!""Detecting_t3"" ->  Detecting_exit!""Detecting_GasPresent""!""Detecting_GasPresent"" -> SKIP;
+						SKIP;Detecting_exited!""Detecting_GasPresent""!""Detecting_GasPresent"" -> SKIP;
+						Detecting_detect.innocuous -> SKIP;Detecting_enter!""Detecting_GasPresent""!""Detecting_CleanAir"" -> Detecting_entered!""Detecting_GasPresent""!""Detecting_CleanAir"" ->
+						S_Detecting_GasPresent
+	T_Detecting_t4	= Detecting_internal__!""Detecting_t4"" ->  Detecting_exit!""Detecting_GasPresent""!""Detecting_GasPresent"" -> SKIP;
+						SKIP;Detecting_exited!""Detecting_GasPresent""!""Detecting_GasPresent"" -> SKIP;
+						Detecting_detect.anomaly -> SKIP;Detecting_enter!""Detecting_GasPresent""!""Detecting_CleanAir"" -> Detecting_entered!""Detecting_GasPresent""!""Detecting_CleanAir"" ->
+						S_Detecting_GasPresent
+	T_Detecting_t5	= Detecting_internal__!""Detecting_t5"" ->  Detecting_exit!""Detecting_GasPresent""!""Detecting_GasPresent"" -> SKIP;
+						SKIP;Detecting_exited!""Detecting_GasPresent""!""Detecting_GasPresent"" -> SKIP;
+						Deadline(Detecting_detect.danger -> SKIP,1);Detecting_enter!""Detecting_GasPresent""!""Detecting_CleanAir"" -> Detecting_entered!""Detecting_GasPresent""!""Detecting_CleanAir"" ->
+						S_Detecting_GasPresent
+	
+
+	S_Detecting_GasPresent_execute(o__) = 
+	SKIP; 
+	Detecting_entered!o__!""Detecting_GasPresent"" ->
+	   (SKIP
+	   										; STOP /\ (
+	   											    T_Detecting_t3[]
+	   											    T_Detecting_t4[]
+	   											    T_Detecting_t5
+	   											    []
+	   											    Detecting_internal__?x:diff(Detecting_TIDS,{""__NULLTRANSITION__"",""Detecting_t3"",""Detecting_t4"",""Detecting_t5""}) ->
+	   											      Detecting_exit?y:diff(Detecting_SIDS,{""Detecting_GasPresent""})!""Detecting_GasPresent"" -> (
+	   											      	SKIP;
+	   											      	Detecting_exited!y!""Detecting_GasPresent"" -> SKIP);
+	   											      	S_Detecting_GasPresent
+	   											    [] Detecting_gas__?x:diff(Detecting_TIDS,{""__NULLTRANSITION__"",""Detecting_t3"",""Detecting_t4"",""Detecting_t5""}) ->
+	   											      Detecting_exit?y:diff(Detecting_SIDS,{""Detecting_GasPresent""})!""Detecting_GasPresent"" -> (
+	   											      	SKIP;
+	   											      	Detecting_exited!y!""Detecting_GasPresent"" -> SKIP);
+	   											      	S_Detecting_GasPresent
+	   											    [] Detecting_detect__?x:diff(Detecting_TIDS,{""__NULLTRANSITION__"",""Detecting_t3"",""Detecting_t4"",""Detecting_t5""})?x__ ->
+	   											      Detecting_exit?y:diff(Detecting_SIDS,{""Detecting_GasPresent""})!""Detecting_GasPresent"" -> (
+	   											      	SKIP;
+	   											      	Detecting_exited!y!""Detecting_GasPresent"" -> SKIP);
+	   											      	S_Detecting_GasPresent
+	   											    )
+	   										)
+within
+Detecting_enter?x:diff(Detecting_SIDS,{""Detecting_GasPresent""})!""Detecting_GasPresent"" -> ( 
+	S_Detecting_GasPresent_execute(x)) 
+
+I_Detecting_i1 = T_Detecting_t1
+
+Detecting_int_int = {|
+	Detecting_gas__.""Detecting_t2"",
+	Detecting_detect__.""Detecting_t2"",
+Detecting_internal__.""Detecting_t2"",
+	Detecting_gas__.""Detecting_t3"",
+	Detecting_detect__.""Detecting_t3"",
+Detecting_internal__.""Detecting_t3"",
+	Detecting_gas__.""Detecting_t4"",
+	Detecting_detect__.""Detecting_t4"",
+Detecting_internal__.""Detecting_t4"",
+	Detecting_gas__.""Detecting_t5"",
+	Detecting_detect__.""Detecting_t5"",
+Detecting_internal__.""Detecting_t5""
+|}
+
+
+T_Detecting_t1	= Detecting_enter!""Detecting""!""Detecting_CleanAir"" -> Detecting_entered!""Detecting""!""Detecting_CleanAir"" ->
+SKIP
+
+S_Detecting_CleanAir_R = S_Detecting_CleanAir
+ 		[|diff(Detecting_int_int,Detecting_CleanAir_triggers)|]
+ 		SKIP
+ 		
+S_Detecting_GasPresent_R = S_Detecting_GasPresent
+ 		[|diff(Detecting_int_int,Detecting_GasPresent_triggers)|]
+ 		SKIP
+ 		
+STM_Detecting = ShowEvents_Detecting(I_Detecting_i1
+[|{|Detecting_enter.x.y,
+		Detecting_entered.x.y,
+		Detecting_exit.x.y,
+		Detecting_exited.x.y |
+		x <- diff(Detecting_SIDS,{""Detecting_CleanAir"",""Detecting_GasPresent""}),
+		y <- {""Detecting_CleanAir"",""Detecting_GasPresent""}
+|}|]
+ShowEvents_Detecting(S_Detecting_CleanAir_R
+  [|inter(CS_Detecting_CleanAir_sync,CS_Detecting_GasPresent_sync)|]
+ S_Detecting_GasPresent_R,inter(CS_Detecting_CleanAir_sync,CS_Detecting_GasPresent_sync))\inter(CS_Detecting_CleanAir_sync,CS_Detecting_GasPresent_sync)
+ 	,{|Detecting_enter,Detecting_entered,
+ 	Detecting_exit,Detecting_exited|})\
+ 	Detecting_internal_events
+-- memory process
+channel getWC_Detecting : Detecting_WC_enablerSet.Bool
+
+
+MemoryTransitions_Detecting = ((Detecting_gas__!""Detecting_t2"" -> MemoryTransitions_Detecting
+[]
+Detecting_internal__!""Detecting_t3"" -> MemoryTransitions_Detecting
+[]
+Detecting_internal__!""Detecting_t4"" -> MemoryTransitions_Detecting
+[]
+Detecting_internal__!""Detecting_t5"" -> MemoryTransitions_Detecting))
+
+
+MemoryVariablesProcesses_Detecting = {}
+
+MemoryVariables_Detecting = ||| (P, alpha) : MemoryVariablesProcesses_Detecting @ P
+MemoryVariablesSyncSet_Detecting = {||}
+MemoryVariablesHideSet_Detecting = {||}
+
+MemoryN_Detecting = (wbisim(MemoryVariables_Detecting) [| MemoryVariablesSyncSet_Detecting |] wbisim(MemoryTransitions_Detecting)) \ MemoryVariablesHideSet_Detecting
+
+Memory_Detecting = (
+Detecting_gas__!""Detecting_t2"" -> Memory_Detecting
+[]
+Detecting_internal__!""Detecting_t3"" -> Memory_Detecting
+[]
+Detecting_internal__!""Detecting_t4"" -> Memory_Detecting
+[]
+Detecting_internal__!""Detecting_t5"" -> Memory_Detecting
+)
+
+MemoryO_Detecting = Memory_Detecting
+
+-- main process
+Detecting_aux = prioritise(timed_priority(((wbisim(STM_Detecting)
+	[|Union({
+		{||},
+		{|Detecting_gas__.""Detecting_t2"",
+		Detecting_internal__.""Detecting_t3"",
+		Detecting_internal__.""Detecting_t4"",
+		Detecting_internal__.""Detecting_t5""|}
+		,
+		{|Detecting_deadline|},
+		Detecting_WCresets
+	})|]
+	(wbisim(MemoryN_Detecting) [| union({|Detecting_WC|},Detecting_WCsync) |] Detecting_WaitingConditions)\{|Detecting_WC|}
+)[[Detecting_gas__.x <- Detecting_gas, Detecting_detect__.x <- Detecting_detect| x<-Detecting_TIDS]]\union({||},{|Detecting_deadline,Detecting_clockReset|}))
+[|{|Detecting_terminate|}|>SKIP\{|Detecting_internal__|}),<{|Detecting_enteredV,Detecting_enterV,Detecting_exitV,Detecting_exitedV|},{Detecting_terminate},{tock}>)
+
+Detecting = timed_priority(Detecting_aux \ {|Detecting_enteredV, Detecting_enterV, Detecting_exitV, Detecting_exitedV|})
+Detecting_VS = Detecting_aux
+}
+",https://robostar.cs.york.ac.uk/case_studies/chemical-detector/chemical-detector.html,"tock-CSP
+Complex and medium length
+Available csp file
+Real-world/research",,,,
+Autonomous Chemical Detector - gas analysis,"Timed(OneStep) {
+
+-- channel GasAnalysis_enteredV, GasAnalysis_exitV : GasAnalysis_SIDS
+
+-- declare clocks
+GasAnalysis_Clocks = {}
+channel GasAnalysis_clockReset -- no clocks declared
+
+-- declare deadlines
+channel GasAnalysis_deadline : GasAnalysis_TIDS.Signal
+
+-- compile waiting conditions
+
+GasAnalysis_WC_enablerSet = {""dummy""}
+
+channel GasAnalysis_WC : GasAnalysis_WC_enablerSet.Bool
+
+GasAnalysis_WCset = {  }
+
+GasAnalysis_WCsync = {||}
+
+GasAnalysis_WCresets = {||}
+
+
+
+GasAnalysis_WaitingConditions = || (alpha, P) : GasAnalysis_WCset @ [alpha] wbisim(P)
+
+CS_GasAnalysis_NoGas_sync = {|
+	GasAnalysis_enter.y.x, 
+	GasAnalysis_entered.y.x, 
+	GasAnalysis_exit.y.x, 
+	GasAnalysis_exited.y.x,
+	GasAnalysis_enter.x.y, 
+	GasAnalysis_entered.x.y, 
+	GasAnalysis_exit.x.y, 
+	GasAnalysis_exited.x.y |
+	x <- {""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""},
+	y <- {""GasAnalysis_NoGas""}
+|}
+
+
+
+S_GasAnalysis_NoGas = let
+	T_GasAnalysis_t2	= GasAnalysis_gas__!""GasAnalysis_t2""?gs -> set_GasAnalysis_gs!gs ->  (GasAnalysis_exit!""GasAnalysis_NoGas""!""GasAnalysis_NoGas"" -> SKIP;
+						SKIP;GasAnalysis_exited!""GasAnalysis_NoGas""!""GasAnalysis_NoGas"" -> SKIP;
+						GasAnalysis_enter!""GasAnalysis_NoGas""!""GasAnalysis_Analysis"" -> GasAnalysis_entered!""GasAnalysis_NoGas""!""GasAnalysis_Analysis"" ->
+						S_GasAnalysis_NoGas
+	)
+	
+
+	S_GasAnalysis_NoGas_execute(o__) = 
+	SKIP; 
+	GasAnalysis_entered!o__!""GasAnalysis_NoGas"" ->
+	   (SKIP
+	   										; STOP /\ (
+	   											    T_GasAnalysis_t2
+	   											    []
+	   											    GasAnalysis_internal__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t2""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas""})!""GasAnalysis_NoGas"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_NoGas"" -> SKIP);
+	   											      	S_GasAnalysis_NoGas
+	   											    [] GasAnalysis_gas__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t2""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas""})!""GasAnalysis_NoGas"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_NoGas"" -> SKIP);
+	   											      	S_GasAnalysis_NoGas
+	   											    [] GasAnalysis_resume__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t2""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas""})!""GasAnalysis_NoGas"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_NoGas"" -> SKIP);
+	   											      	S_GasAnalysis_NoGas
+	   											    [] GasAnalysis_turn__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t2""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas""})!""GasAnalysis_NoGas"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_NoGas"" -> SKIP);
+	   											      	S_GasAnalysis_NoGas
+	   											    [] GasAnalysis_stop__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t2""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas""})!""GasAnalysis_NoGas"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_NoGas"" -> SKIP);
+	   											      	S_GasAnalysis_NoGas
+	   											    )
+	   										)
+within
+GasAnalysis_enter?x:diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas""})!""GasAnalysis_NoGas"" -> ( 
+	S_GasAnalysis_NoGas_execute(x)) 
+CS_GasAnalysis_Analysis_sync = {|
+	GasAnalysis_enter.y.x, 
+	GasAnalysis_entered.y.x, 
+	GasAnalysis_exit.y.x, 
+	GasAnalysis_exited.y.x,
+	GasAnalysis_enter.x.y, 
+	GasAnalysis_entered.x.y, 
+	GasAnalysis_exit.x.y, 
+	GasAnalysis_exited.x.y |
+	x <- {""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""},
+	y <- {""GasAnalysis_Analysis""}
+|}
+
+
+
+S_GasAnalysis_Analysis = let
+	T_GasAnalysis_t3	= GasAnalysis_internal__!""GasAnalysis_t3"" ->  GasAnalysis_exit!""GasAnalysis_Analysis""!""GasAnalysis_Analysis"" -> SKIP;
+						SKIP;GasAnalysis_exited!""GasAnalysis_Analysis""!""GasAnalysis_Analysis"" -> SKIP;
+						GasAnalysis_resume -> SKIP;GasAnalysis_enter!""GasAnalysis_Analysis""!""GasAnalysis_NoGas"" -> GasAnalysis_entered!""GasAnalysis_Analysis""!""GasAnalysis_NoGas"" ->
+						S_GasAnalysis_Analysis
+	T_GasAnalysis_t4	= GasAnalysis_internal__!""GasAnalysis_t4"" ->  GasAnalysis_exit!""GasAnalysis_Analysis""!""GasAnalysis_Analysis"" -> SKIP;
+						SKIP;GasAnalysis_exited!""GasAnalysis_Analysis""!""GasAnalysis_Analysis"" -> SKIP;
+						GasAnalysis_enter!""GasAnalysis_Analysis""!""GasAnalysis_GasDetected"" -> GasAnalysis_entered!""GasAnalysis_Analysis""!""GasAnalysis_GasDetected"" ->
+						S_GasAnalysis_Analysis
+	
+
+	S_GasAnalysis_Analysis_execute(o__) = 
+	get_GasAnalysis_gs?gs -> set_GasAnalysis_st!analysis(gs) -> SKIP; 
+	GasAnalysis_entered!o__!""GasAnalysis_Analysis"" ->
+	   (SKIP
+	   										; STOP /\ (
+	   											    T_GasAnalysis_t3[]
+	   											    T_GasAnalysis_t4
+	   											    []
+	   											    GasAnalysis_internal__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t3"",""GasAnalysis_t4""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Analysis""})!""GasAnalysis_Analysis"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Analysis"" -> SKIP);
+	   											      	S_GasAnalysis_Analysis
+	   											    [] GasAnalysis_gas__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t3"",""GasAnalysis_t4""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Analysis""})!""GasAnalysis_Analysis"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Analysis"" -> SKIP);
+	   											      	S_GasAnalysis_Analysis
+	   											    [] GasAnalysis_resume__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t3"",""GasAnalysis_t4""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Analysis""})!""GasAnalysis_Analysis"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Analysis"" -> SKIP);
+	   											      	S_GasAnalysis_Analysis
+	   											    [] GasAnalysis_turn__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t3"",""GasAnalysis_t4""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Analysis""})!""GasAnalysis_Analysis"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Analysis"" -> SKIP);
+	   											      	S_GasAnalysis_Analysis
+	   											    [] GasAnalysis_stop__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t3"",""GasAnalysis_t4""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Analysis""})!""GasAnalysis_Analysis"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Analysis"" -> SKIP);
+	   											      	S_GasAnalysis_Analysis
+	   											    )
+	   										)
+within
+GasAnalysis_enter?x:diff(GasAnalysis_SIDS,{""GasAnalysis_Analysis""})!""GasAnalysis_Analysis"" -> ( 
+	S_GasAnalysis_Analysis_execute(x)) 
+CS_GasAnalysis_GasDetected_sync = {|
+	GasAnalysis_enter.y.x, 
+	GasAnalysis_entered.y.x, 
+	GasAnalysis_exit.y.x, 
+	GasAnalysis_exited.y.x,
+	GasAnalysis_enter.x.y, 
+	GasAnalysis_entered.x.y, 
+	GasAnalysis_exit.x.y, 
+	GasAnalysis_exited.x.y |
+	x <- {""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""},
+	y <- {""GasAnalysis_GasDetected""}
+|}
+
+
+
+S_GasAnalysis_GasDetected = let
+	T_GasAnalysis_t8	= GasAnalysis_internal__!""GasAnalysis_t8"" ->  GasAnalysis_exit!""GasAnalysis_GasDetected""!""GasAnalysis_GasDetected"" -> SKIP;
+						SKIP;GasAnalysis_exited!""GasAnalysis_GasDetected""!""GasAnalysis_GasDetected"" -> SKIP;
+						GasAnalysis_stop -> SKIP;GasAnalysis_enter!""GasAnalysis_GasDetected""!""GasAnalysis_j1"" -> GasAnalysis_entered!""GasAnalysis_GasDetected""!""GasAnalysis_j1"" ->
+						S_GasAnalysis_GasDetected
+	T_GasAnalysis_t9a	= GasAnalysis_internal__!""GasAnalysis_t9a"" ->  GasAnalysis_exit!""GasAnalysis_GasDetected""!""GasAnalysis_GasDetected"" -> SKIP;
+						SKIP;GasAnalysis_exited!""GasAnalysis_GasDetected""!""GasAnalysis_GasDetected"" -> SKIP;
+						get_GasAnalysis_gs?gs -> set_GasAnalysis_a!location(gs) -> SKIP;get_GasAnalysis_a?a -> GasAnalysis_turn!a -> SKIP;GasAnalysis_enter!""GasAnalysis_GasDetected""!""GasAnalysis_Reading"" -> GasAnalysis_entered!""GasAnalysis_GasDetected""!""GasAnalysis_Reading"" ->
+						S_GasAnalysis_GasDetected
+	
+
+	S_GasAnalysis_GasDetected_execute(o__) = 
+	get_GasAnalysis_gs?gs -> set_GasAnalysis_i!intensity(gs) -> SKIP; 
+	GasAnalysis_entered!o__!""GasAnalysis_GasDetected"" ->
+	   (SKIP
+	   										; STOP /\ (
+	   											    T_GasAnalysis_t8[]
+	   											    T_GasAnalysis_t9a
+	   											    []
+	   											    GasAnalysis_internal__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t8"",""GasAnalysis_t9a""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_GasDetected""})!""GasAnalysis_GasDetected"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_GasDetected"" -> SKIP);
+	   											      	S_GasAnalysis_GasDetected
+	   											    [] GasAnalysis_gas__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t8"",""GasAnalysis_t9a""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_GasDetected""})!""GasAnalysis_GasDetected"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_GasDetected"" -> SKIP);
+	   											      	S_GasAnalysis_GasDetected
+	   											    [] GasAnalysis_resume__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t8"",""GasAnalysis_t9a""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_GasDetected""})!""GasAnalysis_GasDetected"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_GasDetected"" -> SKIP);
+	   											      	S_GasAnalysis_GasDetected
+	   											    [] GasAnalysis_turn__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t8"",""GasAnalysis_t9a""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_GasDetected""})!""GasAnalysis_GasDetected"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_GasDetected"" -> SKIP);
+	   											      	S_GasAnalysis_GasDetected
+	   											    [] GasAnalysis_stop__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t8"",""GasAnalysis_t9a""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_GasDetected""})!""GasAnalysis_GasDetected"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_GasDetected"" -> SKIP);
+	   											      	S_GasAnalysis_GasDetected
+	   											    )
+	   										)
+within
+GasAnalysis_enter?x:diff(GasAnalysis_SIDS,{""GasAnalysis_GasDetected""})!""GasAnalysis_GasDetected"" -> ( 
+	S_GasAnalysis_GasDetected_execute(x)) 
+CS_GasAnalysis_j1_sync = {|
+	GasAnalysis_enter.y.x, 
+	GasAnalysis_entered.y.x, 
+	GasAnalysis_exit.y.x, 
+	GasAnalysis_exited.y.x,
+	GasAnalysis_enter.x.y, 
+	GasAnalysis_entered.x.y, 
+	GasAnalysis_exit.x.y, 
+	GasAnalysis_exited.x.y |
+	x <- {""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""},
+	y <- {""GasAnalysis_j1""}
+|}
+
+
+
+S_GasAnalysis_j1 = let
+	
+
+	S_GasAnalysis_j1_execute(o__) = 
+	SKIP; 
+	GasAnalysis_entered!o__!""GasAnalysis_j1"" ->
+	   GasAnalysis_terminate -> SKIP
+	   within
+GasAnalysis_enter?x:diff(GasAnalysis_SIDS,{""GasAnalysis_j1""})!""GasAnalysis_j1"" -> ( 
+	S_GasAnalysis_j1_execute(x)) 
+CS_GasAnalysis_Reading_sync = {|
+	GasAnalysis_enter.y.x, 
+	GasAnalysis_entered.y.x, 
+	GasAnalysis_exit.y.x, 
+	GasAnalysis_exited.y.x,
+	GasAnalysis_enter.x.y, 
+	GasAnalysis_entered.x.y, 
+	GasAnalysis_exit.x.y, 
+	GasAnalysis_exited.x.y |
+	x <- {""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""},
+	y <- {""GasAnalysis_Reading""}
+|}
+
+
+
+S_GasAnalysis_Reading = let
+	T_GasAnalysis_t0	= GasAnalysis_gas__!""GasAnalysis_t0""?gs -> set_GasAnalysis_gs!gs ->  (GasAnalysis_exit!""GasAnalysis_Reading""!""GasAnalysis_Reading"" -> SKIP;
+						SKIP;GasAnalysis_exited!""GasAnalysis_Reading""!""GasAnalysis_Reading"" -> SKIP;
+						GasAnalysis_enter!""GasAnalysis_Reading""!""GasAnalysis_Analysis"" -> GasAnalysis_entered!""GasAnalysis_Reading""!""GasAnalysis_Analysis"" ->
+						S_GasAnalysis_Reading
+	)
+	
+
+	S_GasAnalysis_Reading_execute(o__) = 
+	SKIP; 
+	GasAnalysis_entered!o__!""GasAnalysis_Reading"" ->
+	   (SKIP
+	   										; STOP /\ (
+	   											    T_GasAnalysis_t0
+	   											    []
+	   											    GasAnalysis_internal__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t0""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Reading""})!""GasAnalysis_Reading"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Reading"" -> SKIP);
+	   											      	S_GasAnalysis_Reading
+	   											    [] GasAnalysis_gas__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t0""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Reading""})!""GasAnalysis_Reading"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Reading"" -> SKIP);
+	   											      	S_GasAnalysis_Reading
+	   											    [] GasAnalysis_resume__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t0""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Reading""})!""GasAnalysis_Reading"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Reading"" -> SKIP);
+	   											      	S_GasAnalysis_Reading
+	   											    [] GasAnalysis_turn__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t0""})?x__ ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Reading""})!""GasAnalysis_Reading"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Reading"" -> SKIP);
+	   											      	S_GasAnalysis_Reading
+	   											    [] GasAnalysis_stop__?x:diff(GasAnalysis_TIDS,{""__NULLTRANSITION__"",""GasAnalysis_t0""}) ->
+	   											      GasAnalysis_exit?y:diff(GasAnalysis_SIDS,{""GasAnalysis_Reading""})!""GasAnalysis_Reading"" -> (
+	   											      	SKIP;
+	   											      	GasAnalysis_exited!y!""GasAnalysis_Reading"" -> SKIP);
+	   											      	S_GasAnalysis_Reading
+	   											    )
+	   										)
+within
+GasAnalysis_enter?x:diff(GasAnalysis_SIDS,{""GasAnalysis_Reading""})!""GasAnalysis_Reading"" -> ( 
+	S_GasAnalysis_Reading_execute(x)) 
+
+I_GasAnalysis_i1 = T_GasAnalysis_t1
+
+GasAnalysis_int_int = {|
+	GasAnalysis_gas__.""GasAnalysis_t2"",
+	GasAnalysis_resume__.""GasAnalysis_t2"",
+	GasAnalysis_turn__.""GasAnalysis_t2"",
+	GasAnalysis_stop__.""GasAnalysis_t2"",
+GasAnalysis_internal__.""GasAnalysis_t2"",
+	GasAnalysis_gas__.""GasAnalysis_t3"",
+	GasAnalysis_resume__.""GasAnalysis_t3"",
+	GasAnalysis_turn__.""GasAnalysis_t3"",
+	GasAnalysis_stop__.""GasAnalysis_t3"",
+GasAnalysis_internal__.""GasAnalysis_t3"",
+	GasAnalysis_gas__.""GasAnalysis_t4"",
+	GasAnalysis_resume__.""GasAnalysis_t4"",
+	GasAnalysis_turn__.""GasAnalysis_t4"",
+	GasAnalysis_stop__.""GasAnalysis_t4"",
+GasAnalysis_internal__.""GasAnalysis_t4"",
+	GasAnalysis_gas__.""GasAnalysis_t8"",
+	GasAnalysis_resume__.""GasAnalysis_t8"",
+	GasAnalysis_turn__.""GasAnalysis_t8"",
+	GasAnalysis_stop__.""GasAnalysis_t8"",
+GasAnalysis_internal__.""GasAnalysis_t8"",
+	GasAnalysis_gas__.""GasAnalysis_t9a"",
+	GasAnalysis_resume__.""GasAnalysis_t9a"",
+	GasAnalysis_turn__.""GasAnalysis_t9a"",
+	GasAnalysis_stop__.""GasAnalysis_t9a"",
+GasAnalysis_internal__.""GasAnalysis_t9a"",
+	GasAnalysis_gas__.""GasAnalysis_t0"",
+	GasAnalysis_resume__.""GasAnalysis_t0"",
+	GasAnalysis_turn__.""GasAnalysis_t0"",
+	GasAnalysis_stop__.""GasAnalysis_t0"",
+GasAnalysis_internal__.""GasAnalysis_t0""
+|}
+
+
+T_GasAnalysis_t1	= GasAnalysis_enter!""GasAnalysis""!""GasAnalysis_NoGas"" -> GasAnalysis_entered!""GasAnalysis""!""GasAnalysis_NoGas"" ->
+SKIP
+
+S_GasAnalysis_NoGas_R = S_GasAnalysis_NoGas
+ 		[|diff(GasAnalysis_int_int,GasAnalysis_NoGas_triggers)|]
+ 		SKIP
+ 		
+S_GasAnalysis_Analysis_R = S_GasAnalysis_Analysis
+ 		[|diff(GasAnalysis_int_int,GasAnalysis_Analysis_triggers)|]
+ 		SKIP
+ 		
+S_GasAnalysis_GasDetected_R = S_GasAnalysis_GasDetected
+ 		[|diff(GasAnalysis_int_int,GasAnalysis_GasDetected_triggers)|]
+ 		SKIP
+ 		
+S_GasAnalysis_j1_R = S_GasAnalysis_j1
+ 		[|diff(GasAnalysis_int_int,GasAnalysis_j1_triggers)|]
+ 		SKIP
+ 		
+S_GasAnalysis_Reading_R = S_GasAnalysis_Reading
+ 		[|diff(GasAnalysis_int_int,GasAnalysis_Reading_triggers)|]
+ 		SKIP
+ 		
+STM_GasAnalysis = ShowEvents_GasAnalysis(I_GasAnalysis_i1
+[|{|GasAnalysis_enter.x.y,
+		GasAnalysis_entered.x.y,
+		GasAnalysis_exit.x.y,
+		GasAnalysis_exited.x.y |
+		x <- diff(GasAnalysis_SIDS,{""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""}),
+		y <- {""GasAnalysis_NoGas"",""GasAnalysis_Analysis"",""GasAnalysis_GasDetected"",""GasAnalysis_j1"",""GasAnalysis_Reading""}
+|}|]
+ShowEvents_GasAnalysis(S_GasAnalysis_NoGas_R
+  [|inter(CS_GasAnalysis_NoGas_sync,union(union(union(CS_GasAnalysis_Analysis_sync,CS_GasAnalysis_GasDetected_sync),CS_GasAnalysis_j1_sync),CS_GasAnalysis_Reading_sync))|]
+ ShowEvents_GasAnalysis(S_GasAnalysis_Analysis_R
+   [|inter(CS_GasAnalysis_Analysis_sync,union(union(CS_GasAnalysis_GasDetected_sync,CS_GasAnalysis_j1_sync),CS_GasAnalysis_Reading_sync))|]
+  ShowEvents_GasAnalysis(S_GasAnalysis_GasDetected_R
+    [|inter(CS_GasAnalysis_GasDetected_sync,union(CS_GasAnalysis_j1_sync,CS_GasAnalysis_Reading_sync))|]
+   ShowEvents_GasAnalysis(S_GasAnalysis_j1_R
+     [|inter(CS_GasAnalysis_j1_sync,CS_GasAnalysis_Reading_sync)|]
+    S_GasAnalysis_Reading_R,inter(CS_GasAnalysis_j1_sync,CS_GasAnalysis_Reading_sync))\inter(CS_GasAnalysis_j1_sync,CS_GasAnalysis_Reading_sync)
+   ,inter(CS_GasAnalysis_GasDetected_sync,union(CS_GasAnalysis_j1_sync,CS_GasAnalysis_Reading_sync)))\inter(CS_GasAnalysis_GasDetected_sync,union(CS_GasAnalysis_j1_sync,CS_GasAnalysis_Reading_sync))
+  ,inter(CS_GasAnalysis_Analysis_sync,union(union(CS_GasAnalysis_GasDetected_sync,CS_GasAnalysis_j1_sync),CS_GasAnalysis_Reading_sync)))\inter(CS_GasAnalysis_Analysis_sync,union(union(CS_GasAnalysis_GasDetected_sync,CS_GasAnalysis_j1_sync),CS_GasAnalysis_Reading_sync))
+ ,inter(CS_GasAnalysis_NoGas_sync,union(union(union(CS_GasAnalysis_Analysis_sync,CS_GasAnalysis_GasDetected_sync),CS_GasAnalysis_j1_sync),CS_GasAnalysis_Reading_sync)))\inter(CS_GasAnalysis_NoGas_sync,union(union(union(CS_GasAnalysis_Analysis_sync,CS_GasAnalysis_GasDetected_sync),CS_GasAnalysis_j1_sync),CS_GasAnalysis_Reading_sync))
+ 	,{|GasAnalysis_enter,GasAnalysis_entered,
+ 	GasAnalysis_exit,GasAnalysis_exited|})\
+ 	GasAnalysis_internal_events
+-- memory process
+channel getWC_GasAnalysis : GasAnalysis_WC_enablerSet.Bool
+
+channel getV_GasAnalysis_st: Status
+channel getV_GasAnalysis_gs: LSeq(GasSensor,2)
+channel getV_GasAnalysis_i: Intensity
+channel getV_GasAnalysis_a: Angle
+
+Memory_GasAnalysis_st(st) = (
+get_GasAnalysis_st!st -> Memory_GasAnalysis_st(st)
+[]
+getV_GasAnalysis_st!st -> Memory_GasAnalysis_st(st)
+[]
+set_GasAnalysis_st?x__ -> Memory_GasAnalysis_st(x__)
+)
+
+
+Memory_GasAnalysis_gs(gs) = (
+get_GasAnalysis_gs!gs -> Memory_GasAnalysis_gs(gs)
+[]
+getV_GasAnalysis_gs!gs -> Memory_GasAnalysis_gs(gs)
+[]
+set_GasAnalysis_gs?x__ -> Memory_GasAnalysis_gs(x__)
+[]
+GasAnalysis_gas__!""GasAnalysis_t2""?gs -> Memory_GasAnalysis_gs(gs)
+[]
+GasAnalysis_gas__!""GasAnalysis_t0""?gs -> Memory_GasAnalysis_gs(gs)
+)
+
+
+Memory_GasAnalysis_i(i) = (
+get_GasAnalysis_i!i -> Memory_GasAnalysis_i(i)
+[]
+getV_GasAnalysis_i!i -> Memory_GasAnalysis_i(i)
+[]
+set_GasAnalysis_i?x__ -> Memory_GasAnalysis_i(x__)
+)
+
+
+Memory_GasAnalysis_a(a) = (
+get_GasAnalysis_a!a -> Memory_GasAnalysis_a(a)
+[]
+getV_GasAnalysis_a!a -> Memory_GasAnalysis_a(a)
+[]
+set_GasAnalysis_a?x__ -> Memory_GasAnalysis_a(x__)
+)
+
+
+MemoryTransitions_GasAnalysis = (getV_GasAnalysis_st?st ->
+getV_GasAnalysis_gs?gs ->
+getV_GasAnalysis_i?i ->
+getV_GasAnalysis_a?a ->
+(GasAnalysis_gas__!""GasAnalysis_t2""?gs -> MemoryTransitions_GasAnalysis
+[]
+((st==noGas))&(GasAnalysis_internal__!""GasAnalysis_t3"" -> MemoryTransitions_GasAnalysis)
+[]
+((st==gasD))&(GasAnalysis_internal__!""GasAnalysis_t4"" -> MemoryTransitions_GasAnalysis)
+[]
+(goreq(i,GasAnalysis_thr))&(GasAnalysis_internal__!""GasAnalysis_t8"" -> MemoryTransitions_GasAnalysis)
+[]
+((not (goreq(i,GasAnalysis_thr))))&(GasAnalysis_internal__!""GasAnalysis_t9a"" -> MemoryTransitions_GasAnalysis)
+[]
+GasAnalysis_gas__!""GasAnalysis_t0""?gs -> MemoryTransitions_GasAnalysis
+[]
+set_GasAnalysis_st?x__ -> MemoryTransitions_GasAnalysis
+[]
+set_GasAnalysis_gs?x__ -> MemoryTransitions_GasAnalysis
+[]
+set_GasAnalysis_i?x__ -> MemoryTransitions_GasAnalysis
+[]
+set_GasAnalysis_a?x__ -> MemoryTransitions_GasAnalysis))
+
+
+MemoryVariablesProcesses_GasAnalysis = {(Memory_GasAnalysis_st(noGas),{|set_GasAnalysis_st,getV_GasAnalysis_st,get_GasAnalysis_st|}),
+(Memory_GasAnalysis_gs(<>),{|set_GasAnalysis_gs,GasAnalysis_gas__.""GasAnalysis_t0"",get_GasAnalysis_gs,getV_GasAnalysis_gs,GasAnalysis_gas__.""GasAnalysis_t2""|}),
+(Memory_GasAnalysis_i(0),{|get_GasAnalysis_i,getV_GasAnalysis_i,set_GasAnalysis_i|}),
+(Memory_GasAnalysis_a(Left),{|set_GasAnalysis_a,get_GasAnalysis_a,getV_GasAnalysis_a|})}
+
+MemoryVariables_GasAnalysis = ||| (P, alpha) : MemoryVariablesProcesses_GasAnalysis @ P
+MemoryVariablesSyncSet_GasAnalysis = {|set_GasAnalysis_gs,
+GasAnalysis_gas__.""GasAnalysis_t0"",
+set_GasAnalysis_a,
+getV_GasAnalysis_gs,
+getV_GasAnalysis_i,
+set_GasAnalysis_st,
+getV_GasAnalysis_st,
+set_GasAnalysis_i,
+GasAnalysis_gas__.""GasAnalysis_t2"",
+getV_GasAnalysis_a|}
+MemoryVariablesHideSet_GasAnalysis = {|getV_GasAnalysis_gs,
+getV_GasAnalysis_i,
+getWC_GasAnalysis,
+getV_GasAnalysis_st,
+getV_GasAnalysis_a|}
+
+MemoryN_GasAnalysis = (wbisim(MemoryVariables_GasAnalysis) [| MemoryVariablesSyncSet_GasAnalysis |] wbisim(MemoryTransitions_GasAnalysis)) \ MemoryVariablesHideSet_GasAnalysis
+
+Memory_GasAnalysis(st,gs,i,a) = (
+get_GasAnalysis_st!st -> Memory_GasAnalysis(st,gs,i,a)
+[]
+set_GasAnalysis_st?x__ -> Memory_GasAnalysis(x__,gs,i,a)
+[]
+get_GasAnalysis_gs!gs -> Memory_GasAnalysis(st,gs,i,a)
+[]
+set_GasAnalysis_gs?x__ -> Memory_GasAnalysis(st,x__,i,a)
+[]
+get_GasAnalysis_i!i -> Memory_GasAnalysis(st,gs,i,a)
+[]
+set_GasAnalysis_i?x__ -> Memory_GasAnalysis(st,gs,x__,a)
+[]
+get_GasAnalysis_a!a -> Memory_GasAnalysis(st,gs,i,a)
+[]
+set_GasAnalysis_a?x__ -> Memory_GasAnalysis(st,gs,i,x__)
+
+[]
+GasAnalysis_gas__!""GasAnalysis_t2""?gs -> Memory_GasAnalysis(st,gs,i,a)
+[]
+((st==noGas))&(GasAnalysis_internal__!""GasAnalysis_t3"" -> Memory_GasAnalysis(st,gs,i,a))
+[]
+((st==gasD))&(GasAnalysis_internal__!""GasAnalysis_t4"" -> Memory_GasAnalysis(st,gs,i,a))
+[]
+(goreq(i,GasAnalysis_thr))&(GasAnalysis_internal__!""GasAnalysis_t8"" -> Memory_GasAnalysis(st,gs,i,a))
+[]
+((not (goreq(i,GasAnalysis_thr))))&(GasAnalysis_internal__!""GasAnalysis_t9a"" -> Memory_GasAnalysis(st,gs,i,a))
+[]
+GasAnalysis_gas__!""GasAnalysis_t0""?gs -> Memory_GasAnalysis(st,gs,i,a)
+)
+
+MemoryO_GasAnalysis = Memory_GasAnalysis(noGas,<>,0,Left)
+
+-- main process
+GasAnalysis_aux = prioritise(timed_priority(((wbisim(STM_GasAnalysis)
+	[|Union({
+		{|get_GasAnalysis_st,set_GasAnalysis_st,
+		get_GasAnalysis_gs,set_GasAnalysis_gs,
+		get_GasAnalysis_i,set_GasAnalysis_i,
+		get_GasAnalysis_a,set_GasAnalysis_a|},
+		{|GasAnalysis_gas__.""GasAnalysis_t2"",
+		GasAnalysis_internal__.""GasAnalysis_t3"",
+		GasAnalysis_internal__.""GasAnalysis_t4"",
+		GasAnalysis_internal__.""GasAnalysis_t8"",
+		GasAnalysis_internal__.""GasAnalysis_t9a"",
+		GasAnalysis_gas__.""GasAnalysis_t0""|}
+		,
+		{|GasAnalysis_deadline|},
+		GasAnalysis_WCresets
+	})|]
+	(wbisim(MemoryN_GasAnalysis) [| union({|GasAnalysis_WC|},GasAnalysis_WCsync) |] GasAnalysis_WaitingConditions)\{|GasAnalysis_WC|}
+)[[GasAnalysis_gas__.x <- GasAnalysis_gas, GasAnalysis_resume__.x <- GasAnalysis_resume, GasAnalysis_turn__.x <- GasAnalysis_turn, GasAnalysis_stop__.x <- GasAnalysis_stop| x<-GasAnalysis_TIDS]]\union({|get_GasAnalysis_st,set_GasAnalysis_st,
+get_GasAnalysis_gs,set_GasAnalysis_gs,
+get_GasAnalysis_i,set_GasAnalysis_i,
+get_GasAnalysis_a,set_GasAnalysis_a|},{|GasAnalysis_deadline,GasAnalysis_clockReset|}))
+[|{|GasAnalysis_terminate|}|>SKIP\{|GasAnalysis_internal__|}),<{|GasAnalysis_enteredV,GasAnalysis_enterV,GasAnalysis_exitV,GasAnalysis_exitedV|},{GasAnalysis_terminate},{tock}>)
+
+GasAnalysis = timed_priority(GasAnalysis_aux \ {|GasAnalysis_enteredV, GasAnalysis_enterV, GasAnalysis_exitV, GasAnalysis_exitedV|})
+GasAnalysis_VS = GasAnalysis_aux
+}",https://robostar.cs.york.ac.uk/case_studies/autonomous-chemical-detector/autonomous-chemical-detector.html,"tock-CSP
+Complex and long
+Available csp file
+Real-world/research",,,,
+S-Ranger - Movement,"
+--
+-- RoboChart generator version 3.0.0.202209090727
+-- Automatically generated on 23-09-2022 12:09:48
+--
+-- Iterated compression status: true
+-- Assertions compression status: false
+--
+
+	module SimFW_Movement
+		shared_variable_events = {|
+		|}
+		
+	exports
+		transparent diamond
+		transparent sbisim
+		transparent dbisim
+		transparent chase
+
+		-- declaring controller events
+		channel obstacle: InOut
+		
+		
+		
+		-- declaring call and ret events for undefined operations
+		channel stopCall
+		channel moveCall: core_real.core_real
+		
+		-- declaring controller termination channel
+		channel terminate
+		
+		-- channel set with all visible events
+		sem__events = {|
+			terminate
+		,	obstacle
+		,	stopCall,
+			moveCall
+		|}
+		
+		-- set of visible memory events
+		visibleMemoryEvents = {||}
+
+		-- defined operations
+	
+		-- declaring machines
+		module stm_ref0
+		exports
+			transparent diamond
+			transparent sbisim
+			transparent dbisim
+			transparent chase
+		
+			-- Transition identifiers
+			-- declaring identifiers of transitions
+			datatype NIDS = 
+			              NID_i1|
+			              NID_Moving|
+			              NID_Turning
+			
+			channel internal__ : NIDS
+			
+			-- Flow channels		
+			channel interrupt
+			channel exited
+			channel exit
+			channel terminate
+			
+			-- Variable channels
+			
+			-- Shared variable channels
+			
+			-- Local variable channels for defined operations that are required by the state machine
+			
+			-- Declaring state machine events
+			channel obstacle__: NIDS.InOut
+			channel obstacle: InOut
+			
+			-- Declaring call and ret events for undefined operations
+			channel stopCall
+			channel moveCall: core_real.core_real
+			
+			enterSS = {|
+			i1::enter,
+			Moving::enter,
+			Turning::enter
+			|}
+			
+			enteredSS = 	{|
+			Moving::entered,
+			Turning::entered
+			|}
+			
+			internal_events = union(enteredSS,union(enterSS,{|interrupt,exited|}))
+			
+			shared_variable_events = {|
+			|}
+			
+			-- channel set with all visible events
+			sem__events = {|
+				terminate
+			,	obstacle
+			,	stopCall,
+				moveCall
+				|}
+			datatype ClockSet = 
+				CLID_MBC
+			
+			channel clockReset, clockResetL, clockResetR : ClockSet
+			
+			localClockResets = {|clockReset.CLID_MBC|}
+			
+			
+			channel get_CLID_Turning : core_clock_type 
+			channel get_CLID_Moving : core_clock_type 
+			channel get_CLID_MBC : core_clock_type 
+			--channel increment__
+			
+			CLID_Turning_clock_type(id__,
+					          const_SimFW_SMovement_lv,
+					          const_SimFW_SMovement_PI,
+					          const_SimFW_SMovement_av) = 
+				let
+					max = (clock_type_max(Union({
+			{}
+			}))+1)
+				ctype = {0..max}
+			within
+				if member(max,core_clock_type) then ctype else error(""core_clock_type is not wide enough"")
+			
+			CLID_Moving_clock_type(id__,
+					          const_SimFW_SMovement_lv,
+					          const_SimFW_SMovement_PI,
+					          const_SimFW_SMovement_av) = 
+				let
+					max = (clock_type_max(Union({
+			{}
+			}))+1)
+				ctype = {0..max}
+			within
+				if member(max,core_clock_type) then ctype else error(""core_clock_type is not wide enough"")
+			
+			CLID_MBC_clock_type(id__,
+					          const_SimFW_SMovement_lv,
+					          const_SimFW_SMovement_PI,
+					          const_SimFW_SMovement_av) = 
+				let
+					max = (clock_type_max(Union({
+			({Div(const_SimFW_SMovement_PI, no_zero_div(const_SimFW_SMovement_av), core_real)|av <- core_real,PI <- core_real})
+			}))+1)
+				ctype = {0..max}
+			within
+				if member(max,core_clock_type) then ctype else error(""core_clock_type is not wide enough"")
+			
+			
+		
+				-- Nodes --
+				-- declaring all nodes
+				
+				----------------------------------------------------------------------
+				-- Initial: i1
+				module i1
+				exports
+				
+					channel enter, interrupt
+					
+					Timed(OneStep) {
+						D__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) = 
+							dbisim(let
+								Inactive 	= share__choice(enter -> SKIP [] terminate -> SKIP) ; Active
+								
+								Termination = terminate -> SKIP
+								
+								Active 		= share__choice(interrupt -> SKIP) ; Inactive
+							within
+								Inactive [| {terminate} |> SKIP)
+						
+						VS_O__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) = D__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av)
+					}
+				
+				endmodule
+				----------------------------------------------------------------------
+				
+				
+				----------------------------------------------------------------------
+				-- State: Moving
+				module Moving
+				
+				enterSS = {}
+				
+				enteredSS = {}
+				
+				exports
+				
+					--  Declarations
+					
+					channel enter, entered, interrupt
+					channel enteredL, enteredR
+					
+									
+					
+					--channel increment__
+					
+					
+					--	Nodes
+					-- declaring all nodes
+					
+					
+					Timed(OneStep) {
+						--	Rule: behaviours(Node)
+						--  Note that FDR has problems with efficiently compiling the process below
+						-- 	if using a different recursion pattern.
+						D__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) = 
+						dbisim(let
+							-- IMPLEMENTATION NOTE: 
+							-- The following should be defined as: Inactive = share__choice(Activation [] Termination),
+							-- however FDR struggles with that form in certain cases. So we use the exception operator
+							-- instead to 'terminate'.
+							
+							Inactive 	= share__choice(enter -> SKIP [] terminate -> SKIP) ; Active
+							
+							Termination = terminate -> SKIP
+							
+							Active 		= true&CALL__move(
+										id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av,
+										const_SimFW_SMovement_lv,
+										0
+									);SHARE_WAIT(1) ; 
+									 	  Behaviour ; 
+									 	  share__choice(exit -> SKIP) ; SKIP ; 
+									 	  share__choice(exited -> SKIP) ; Inactive
+						
+							Behaviour 	= entered -> During
+							During 		= ((SKIP ; SStop) /\ interrupt -> SKIP)
+						within
+							Inactive [| {terminate} |> SKIP)
+							
+						VS_O__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) = 
+						dbisim(let
+							Inactive 	= share__choice(enter -> SKIP [] terminate -> SKIP) ; Active
+							
+							Termination = terminate -> SKIP
+							
+							Active 		= true&CALL__move(
+										id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av,
+										const_SimFW_SMovement_lv,
+										0
+									);SHARE_WAIT(1) ; 
+									 	  Behaviour ; 
+									 	  share__choice(exit -> SKIP) ; SKIP ; 
+									 	  share__choice(exited -> SKIP) ; Inactive
+						
+							Behaviour 	= entered -> During
+							During 		= ((SKIP ; SStop) /\ interrupt -> SKIP)
+						within
+							Inactive [| {terminate} |> SKIP)
+						
+						
+						-- Clocks
+						
+						StateClocks(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av) = terminate -> SKIP
+						
+						stateClockSync = {||}
+					}
+				
+				endmodule
+				----------------------------------------------------------------------
+				
+				
+				----------------------------------------------------------------------
+				-- State: Turning
+				module Turning
+				
+				enterSS = {}
+				
+				enteredSS = {}
+				
+				exports
+				
+					--  Declarations
+					
+					channel enter, entered, interrupt
+					channel enteredL, enteredR
+					
+									
+					
+					--channel increment__
+					
+					
+					--	Nodes
+					-- declaring all nodes
+					
+					
+					Timed(OneStep) {
+						--	Rule: behaviours(Node)
+						--  Note that FDR has problems with efficiently compiling the process below
+						-- 	if using a different recursion pattern.
+						D__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) = 
+						dbisim(let
+							-- IMPLEMENTATION NOTE: 
+							-- The following should be defined as: Inactive = share__choice(Activation [] Termination),
+							-- however FDR struggles with that form in certain cases. So we use the exception operator
+							-- instead to 'terminate'.
+							
+							Inactive 	= share__choice(enter -> SKIP [] terminate -> SKIP) ; Active
+							
+							Termination = terminate -> SKIP
+							
+							Active 		= true&CALL__move(
+										id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av,
+										0,
+										const_SimFW_SMovement_av
+									);SHARE_WAIT(1) ; 
+									 	  Behaviour ; 
+									 	  share__choice(exit -> SKIP) ; SKIP ; 
+									 	  share__choice(exited -> SKIP) ; Inactive
+						
+							Behaviour 	= entered -> During
+							During 		= ((SKIP ; SStop) /\ interrupt -> SKIP)
+						within
+							Inactive [| {terminate} |> SKIP)
+							
+						VS_O__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) = 
+						dbisim(let
+							Inactive 	= share__choice(enter -> SKIP [] terminate -> SKIP) ; Active
+							
+							Termination = terminate -> SKIP
+							
+							Active 		= true&CALL__move(
+										id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av,
+										0,
+										const_SimFW_SMovement_av
+									);SHARE_WAIT(1) ; 
+									 	  Behaviour ; 
+									 	  share__choice(exit -> SKIP) ; SKIP ; 
+									 	  share__choice(exited -> SKIP) ; Inactive
+						
+							Behaviour 	= entered -> During
+							During 		= ((SKIP ; SStop) /\ interrupt -> SKIP)
+						within
+							Inactive [| {terminate} |> SKIP)
+						
+						
+						-- Clocks
+						
+						StateClocks(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av) = terminate -> SKIP
+						
+						stateClockSync = {||}
+					}
+				
+				endmodule
+				----------------------------------------------------------------------
+				
+				-- END of Nodes --
+				
+				Timed(OneStep) {
+				-- Operation calls --
+				-- Only the undefined operations are declared here.
+				-- If the state machine is in isolation, all required operations will be undefined.
+				-- If it is in the context of a controller, the required operations not provided by the
+				-- controller will be declared here, and the defined operations will be defined in the
+				-- context of the Controller module, and therefore within scope of the state machine module.
+				CALL__stop(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = EDeadline(stopCall,0)
+				CALL__move(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av,
+							param_lv,
+							param_av) = EDeadline(moveCall.param_lv.param_av,0)
+				
+				-- END of Operation calls --
+			
+				-- STM processes
+				STM(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = prioritise(-- RULE: [[stm:StateMachineDef]]_STM^nops : CSPProcess
+				( 
+					(
+						(
+							(IteratedStateful(id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av) \ {terminate} ; share__choice(terminate -> SKIP))
+						 	[[ share__ <- x__ | x__ <- {||} ]]
+						)
+					[| {share__} |]
+					SKIP
+					)
+					[| union(sharedVarSync,{terminate}) |]
+					dbisim(sharedVarMemory(id__,
+							    const_SimFW_SMovement_lv,
+							    const_SimFW_SMovement_PI,
+							    const_SimFW_SMovement_av))
+				)\sharedVarHide
+				,<{terminate},{tock}>)
+				
+				STM_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = prioritise(-- RULE: [[stm:StateMachineDef]]_STM^nops : CSPProcess
+				( 
+					(
+						(
+							(IteratedStateful_VS_O(id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av) \ {terminate} ; share__choice(terminate -> SKIP))
+						 	[[ share__ <- x__ | x__ <- {||} ]]
+						)
+					[| {share__} |]
+					SKIP
+					)
+					[| union(sharedVarSync,{terminate}) |]
+					dbisim(sharedVarMemory(id__,
+							    const_SimFW_SMovement_lv,
+							    const_SimFW_SMovement_PI,
+							    const_SimFW_SMovement_av))
+				)\sharedVarHide
+				,<{terminate},{tock}>)
+				
+				-- Transitions
+				Transitions(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = ((let
+					Trans = share__choice(get_CLID_MBC?MBC:CLID_MBC_clock_type(id__,
+							          const_SimFW_SMovement_lv,
+							          const_SimFW_SMovement_PI,
+							          const_SimFW_SMovement_av) -> TimeOut_1(
+						 (share__ -> SKIP
+						 [] dbisim((true)&(internal__!NID_i1 -> SKIP ;  ((SKIP ; Moving::enter -> SKIP))))
+						 [] dbisim((true)&(obstacle__!NID_Moving.in -> SKIP ; (share__choice(clockReset.CLID_MBC -> SKIP) ; share__choice(SKIP))
+						 ; share__choice(exit -> SKIP) ; (share__choice(exited -> SKIP) ; true&CALL__stop(
+						 			id__,
+						 		    const_SimFW_SMovement_lv,
+						 		    const_SimFW_SMovement_PI,
+						 		    const_SimFW_SMovement_av
+						 		);SHARE_WAIT(1) ; Turning::enter -> SKIP)))
+						 [] dbisim(((MBC>=Div(const_SimFW_SMovement_PI, const_SimFW_SMovement_av, core_real)))&(internal__!NID_Turning -> SKIP ;  share__choice(exit -> SKIP) ; (share__choice(exited -> SKIP) ; SKIP ; Moving::enter -> SKIP)))
+						 []
+						 (interrupt -> share__choice(exit -> SKIP) ; share__choice(exited -> terminate -> SKIP))
+						 []
+						 terminate -> SKIP
+						 )
+					,SKIP);Trans
+					)
+				within
+					Trans [|{terminate}|> SKIP
+				)
+				)
+				
+				-- Stateful
+				-- RULE: Stateful(stm:StateMachineBody) : CSPProcess
+				
+				-- Named process definitions
+				MachineBody(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((
+					let
+						finalNodesEntered = {||}
+					within
+						(dbisim((dbisim((let
+							-- IMPLEMENTATION NOTE:
+							-- Here the 'enter' channel set is calculated explicitly because of the use of CSPM 
+							-- modules for defining the semantics of each node.
+							enterSS = {|
+							i1::enter,
+							Moving::enter,
+							Turning::enter
+							|}
+							hideSet = union(enterSS,{|exit,exited,internal__|})
+						within 
+							((let
+								-- IMPLEMENTATION NOTE: the channel set 'enter' is calculated explicitly
+								-- because CSPM modules are used for the semantics of Node.
+								flowevts = union(enterSS,{|exit,exited,interrupt|})
+								transSync = {|internal__.NID_i1,obstacle__.NID_Moving.in,internal__.NID_Turning|}
+							within
+								((
+								 (((-- RULE composeNodes(nc:NodeContainer)^nops : CSPProcess
+								   i1::D__(id__,
+								   		    const_SimFW_SMovement_lv,
+								   		    const_SimFW_SMovement_PI,
+								   		    const_SimFW_SMovement_av)
+								   [| { share__, terminate } |] (
+								   Moving::D__(id__,
+								   		    const_SimFW_SMovement_lv,
+								   		    const_SimFW_SMovement_PI,
+								   		    const_SimFW_SMovement_av)
+								   [| { share__, terminate } |] (
+								   Turning::D__(id__,
+								   		    const_SimFW_SMovement_lv,
+								   		    const_SimFW_SMovement_PI,
+								   		    const_SimFW_SMovement_av)
+								   )
+								   )
+								 )
+								 [[Moving::interrupt <- x__ | x__ <- {|interrupt,obstacle__.NID_Moving.in|}]]
+								 [[Turning::interrupt <- x__ | x__ <- {|interrupt,internal__.NID_Turning|}]]
+								 [[i1::interrupt <- x__ | x__ <- {|internal__.NID_i1|}]]
+								 )
+								  [[ share__ <- x__ | x__ <- {| share__ |} ]] 
+								  [[clockReset.CLID_MBC <- clockResetL.CLID_MBC]]
+								 )
+								 [| union(union(union(flowevts,transSync),{terminate}),{|share__
+								 			,clockResetL.CLID_MBC
+								|}) |]
+								 ((i1::enter -> Transitions(id__,
+								 		    const_SimFW_SMovement_lv,
+								 		    const_SimFW_SMovement_PI,
+								 		    const_SimFW_SMovement_av))
+								  [[ share__ <- x__ | x__ <- {| share__,clockResetL.CLID_MBC |} ]]
+								 )
+								)[[clockResetL.CLID_MBC <- clockReset.CLID_MBC]]
+								)
+							)
+							 \ hideSet)
+							[[
+								obstacle__.x____ <- obstacle
+								| x____ <- NIDS
+							]]
+						)
+						)
+						 [| union(stateClockSync,{terminate}) |]
+						 StateClocks(id__,
+						 		          const_SimFW_SMovement_lv,
+						 		          const_SimFW_SMovement_PI,
+						 		          const_SimFW_SMovement_av)
+						)\diff(stateClockSync,enteredSS))
+						 [| {| interrupt |} |] SKIP)
+					)
+					)
+				
+				Behaviour(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((let
+						stateClockSync = {|get_CLID_Turning,Turning::entered,get_CLID_Moving,Moving::entered|}
+					 within
+						(MachineBody(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) [| union(stateClockSync,{terminate}) |] StateClocks(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)) \ union(stateClockSync,enteredSS)
+					)
+					)
+				
+				IteratedBehaviour(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((let
+						stateClockSync = {|get_CLID_Turning,Turning::entered,get_CLID_Moving,Moving::entered|}
+					 within
+						(dbisim(
+							sbisim(
+								dbisim(
+									sbisim(
+										MachineBody(id__,
+												    const_SimFW_SMovement_lv,
+												    const_SimFW_SMovement_PI,
+												    const_SimFW_SMovement_av)
+										[| {|get_CLID_Moving,Moving::entered,terminate|} |]
+										dbisim(Clock_CLID_Moving(id__,0,
+												          const_SimFW_SMovement_lv,
+												          const_SimFW_SMovement_PI,
+												          const_SimFW_SMovement_av))
+									)\{|get_CLID_Moving|}
+								)
+								[| {|get_CLID_Turning,Turning::entered,terminate|} |]
+								dbisim(Clock_CLID_Turning(id__,0,
+										          const_SimFW_SMovement_lv,
+										          const_SimFW_SMovement_PI,
+										          const_SimFW_SMovement_av))
+							)\{|get_CLID_Turning|}
+						)
+						) \ union(stateClockSync,enteredSS)
+					)
+					)
+				
+				Stateful(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					((let
+						getsetLocalChannels = {||}
+						clockSync = {|get_CLID_MBC,clockReset.CLID_MBC|}
+					within
+						(Behaviour(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) 
+						 [| union(union(getsetLocalChannels,clockSync),{terminate}) |] 
+						 (varMemory(id__,
+						 		    const_SimFW_SMovement_lv,
+						 		    const_SimFW_SMovement_PI,
+						 		    const_SimFW_SMovement_av) [| {terminate} |] Clocks(id__,
+						 		          const_SimFW_SMovement_lv,
+						 		          const_SimFW_SMovement_PI,
+						 		          const_SimFW_SMovement_av))
+					 	)\union(getsetLocalChannels,clockSync)
+					)
+					)
+				
+				IteratedStateful(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) =
+					(dbisim(
+						sbisim(
+							IteratedBehaviour(id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av)
+							[| {|get_CLID_MBC,clockReset.CLID_MBC,terminate|} |]
+							dbisim(Clock_CLID_MBC(id__,0,
+									          const_SimFW_SMovement_lv,
+									          const_SimFW_SMovement_PI,
+									          const_SimFW_SMovement_av))
+						)\{|get_CLID_MBC,clockReset.CLID_MBC|}
+					)
+					)
+				
+				-- Visible counterparts
+				MachineBody_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((
+					let
+						finalNodesEntered = {||}
+					within
+						(dbisim((dbisim((let
+							-- IMPLEMENTATION NOTE:
+							-- Here the 'enter' channel set is calculated explicitly because of the use of CSPM 
+							-- modules for defining the semantics of each node.
+							enterSS = {|
+							i1::enter,
+							Moving::enter,
+							Turning::enter
+							|}
+							hideSet = union(enterSS,{|exit,exited,internal__|})
+						within 
+							((let
+								-- IMPLEMENTATION NOTE: the channel set 'enter' is calculated explicitly
+								-- because CSPM modules are used for the semantics of Node.
+								flowevts = union(enterSS,{|exit,exited,interrupt|})
+								transSync = {|internal__.NID_i1,obstacle__.NID_Moving.in,internal__.NID_Turning|}
+							within
+								((
+								 (((-- RULE composeNodes(nc:NodeContainer)^nops : CSPProcess
+								   i1::VS_O__(id__,
+								   		    const_SimFW_SMovement_lv,
+								   		    const_SimFW_SMovement_PI,
+								   		    const_SimFW_SMovement_av)
+								   [| { share__, terminate } |] (
+								   Moving::VS_O__(id__,
+								   		    const_SimFW_SMovement_lv,
+								   		    const_SimFW_SMovement_PI,
+								   		    const_SimFW_SMovement_av)
+								   [| { share__, terminate } |] (
+								   Turning::VS_O__(id__,
+								   		    const_SimFW_SMovement_lv,
+								   		    const_SimFW_SMovement_PI,
+								   		    const_SimFW_SMovement_av)
+								   )
+								   )
+								 )
+								 [[Moving::interrupt <- x__ | x__ <- {|interrupt,obstacle__.NID_Moving.in|}]]
+								 [[Turning::interrupt <- x__ | x__ <- {|interrupt,internal__.NID_Turning|}]]
+								 [[i1::interrupt <- x__ | x__ <- {|internal__.NID_i1|}]]
+								 )
+								  [[ share__ <- x__ | x__ <- {| share__ |} ]] 
+								  [[clockReset.CLID_MBC <- clockResetL.CLID_MBC]]
+								 )
+								 [| union(union(union(flowevts,transSync),{terminate}),{|share__
+								 			,clockResetL.CLID_MBC
+								|}) |]
+								 ((i1::enter -> Transitions(id__,
+								 		    const_SimFW_SMovement_lv,
+								 		    const_SimFW_SMovement_PI,
+								 		    const_SimFW_SMovement_av))
+								  [[ share__ <- x__ | x__ <- {| share__,clockResetL.CLID_MBC |} ]]
+								 )
+								)[[clockResetL.CLID_MBC <- clockReset.CLID_MBC]]
+								)
+							)
+							 \ hideSet)
+							[[
+								obstacle__.x____ <- obstacle
+								| x____ <- NIDS
+							]]
+						)
+						)
+						 [| union(stateClockSync,{terminate}) |]
+						 StateClocks(id__,
+						 		          const_SimFW_SMovement_lv,
+						 		          const_SimFW_SMovement_PI,
+						 		          const_SimFW_SMovement_av)
+						)\diff(stateClockSync,enteredSS))
+						 [| {| interrupt |} |] SKIP)
+					)
+					)
+				
+				Behaviour_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((let
+						stateClockSync = {|get_CLID_Turning,Turning::entered,get_CLID_Moving,Moving::entered|}
+					 within
+						(MachineBody_VS_O(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) [| union(stateClockSync,{terminate}) |] StateClocks(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)) \ diff(union(stateClockSync,enteredSS),enteredSS)
+					)
+					)
+				
+				IteratedBehaviour_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((let
+						stateClockSync = {|get_CLID_Turning,Turning::entered,get_CLID_Moving,Moving::entered|}
+					 within
+						(dbisim(
+							sbisim(
+								dbisim(
+									sbisim(
+										MachineBody_VS_O(id__,
+												    const_SimFW_SMovement_lv,
+												    const_SimFW_SMovement_PI,
+												    const_SimFW_SMovement_av)
+										[| {|get_CLID_Moving,Moving::entered,terminate|} |]
+										dbisim(Clock_CLID_Moving(id__,0,
+												          const_SimFW_SMovement_lv,
+												          const_SimFW_SMovement_PI,
+												          const_SimFW_SMovement_av))
+									)\{|get_CLID_Moving|}
+								)
+								[| {|get_CLID_Turning,Turning::entered,terminate|} |]
+								dbisim(Clock_CLID_Turning(id__,0,
+										          const_SimFW_SMovement_lv,
+										          const_SimFW_SMovement_PI,
+										          const_SimFW_SMovement_av))
+							)\{|get_CLID_Turning|}
+						)
+						) \ diff(union(stateClockSync,enteredSS),enteredSS)
+					)
+					)
+				
+				Stateful_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = 
+					dbisim((let
+						getsetLocalChannels = {||}
+						clockSync = {|get_CLID_MBC,clockReset.CLID_MBC|}
+					within
+						(Behaviour_VS_O(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av) 
+						 [| union(union(getsetLocalChannels,clockSync),{terminate}) |] 
+						 (varMemory(id__,
+						 		    const_SimFW_SMovement_lv,
+						 		    const_SimFW_SMovement_PI,
+						 		    const_SimFW_SMovement_av) [| {terminate} |] Clocks(id__,
+						 		          const_SimFW_SMovement_lv,
+						 		          const_SimFW_SMovement_PI,
+						 		          const_SimFW_SMovement_av))
+					 	)\union(getsetLocalChannels,clockSync)
+					)
+					)
+				
+				IteratedStateful_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) =
+					(dbisim(
+						sbisim(
+							IteratedBehaviour_VS_O(id__,
+									    const_SimFW_SMovement_lv,
+									    const_SimFW_SMovement_PI,
+									    const_SimFW_SMovement_av)
+							[| {|get_CLID_MBC,clockReset.CLID_MBC,terminate|} |]
+							dbisim(Clock_CLID_MBC(id__,0,
+									          const_SimFW_SMovement_lv,
+									          const_SimFW_SMovement_PI,
+									          const_SimFW_SMovement_av))
+						)\{|get_CLID_MBC,clockReset.CLID_MBC|}
+					)
+					)
+				
+				-- END
+				
+				-- Memory
+				-- Memory variables
+				
+				-- varMemory process
+				varMemory(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = terminate -> SKIP
+				
+				getsetLocalChannels = {||}
+				
+				-- Definition of the behaviour of state machines (default, optimised, visible, visible and optimised)
+				FVS__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = STM_VS_O(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) \ localClockResets
+				D__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = timed_priority(STM(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) \ union(internal_events,localClockResets))
+				O__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = dbisim(D__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av))
+				VS__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = FVS__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av)
+				VS_O__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = dbisim(FVS__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av))
+				HEXT__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = O__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) [|shared_variable_events|] SKIP
+				FVS_C__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = dbisim(timed_priority(STM(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) \ internal_events))
+				HUP__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = timed_priority(O__(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) [|{share__}|] SKIP)
+				
+				-- Clocks
+				Clock_CLID_MBC(id__,x__,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av) = 
+					TimeOut_1(
+						clockReset.CLID_MBC -> Clock_CLID_MBC(id__,0,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)
+						[]
+						get_CLID_MBC!x__ -> Clock_CLID_MBC(id__,x__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)
+						[]
+						terminate -> SKIP,Clock_CLID_MBC(id__,clock_type_plus(x__,1,CLID_MBC_clock_type(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)),
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av))
+				
+				Clocks(id__,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av) = dbisim(Clock_CLID_MBC(id__,0,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av))
+				
+				clockSync = {|get_CLID_MBC,clockReset.CLID_MBC|}
+				
+				Clock_CLID_Turning(id__,x__,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av) = 
+					TimeOut_1(
+						Turning::entered -> Clock_CLID_Turning(id__,0,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)
+						[]
+						get_CLID_Turning!x__ -> Clock_CLID_Turning(id__,x__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)
+						[]
+						terminate -> SKIP,Clock_CLID_Turning(id__,clock_type_plus(x__,1,CLID_Turning_clock_type(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)),
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av))
+				Clock_CLID_Moving(id__,x__,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av) = 
+					TimeOut_1(
+						Moving::entered -> Clock_CLID_Moving(id__,0,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)
+						[]
+						get_CLID_Moving!x__ -> Clock_CLID_Moving(id__,x__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)
+						[]
+						terminate -> SKIP,Clock_CLID_Moving(id__,clock_type_plus(x__,1,CLID_Moving_clock_type(id__,
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av)),
+								          const_SimFW_SMovement_lv,
+								          const_SimFW_SMovement_PI,
+								          const_SimFW_SMovement_av))
+				
+				StateClocks(id__,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av) = dbisim(Clock_CLID_Turning(id__,0,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av))
+				[| { terminate } |] (
+				dbisim(Clock_CLID_Moving(id__,0,
+						          const_SimFW_SMovement_lv,
+						          const_SimFW_SMovement_PI,
+						          const_SimFW_SMovement_av))
+				)
+				
+				stateClockSync = {|get_CLID_Turning,Turning::entered,get_CLID_Moving,Moving::entered|}
+				
+				-- Shared memory
+				-- Shared memory variables
+				
+				-- sharedVarMemory process
+				sharedVarMemory(id__,
+						    const_SimFW_SMovement_lv,
+						    const_SimFW_SMovement_PI,
+						    const_SimFW_SMovement_av) = terminate -> SKIP
+				
+				sharedVarSync = {||}
+				
+				sharedVarHide = {||}
+				}
+		endmodule
+		
+		Timed(OneStep) {
+				-- undefined operations
+				CALL__stop(id__) 	= stopCall -> SKIP
+				CALL__move(id__,
+						    param_lv,
+						    param_av) 	= moveCall.param_lv.param_av -> SKIP
+				
+				-- declaring controller memory
+				Memory(id__) = SKIP
+				
+				D__(id__,
+						    const_SimFW_Movement_stm_ref0_lv,
+						    const_SimFW_Movement_stm_ref0_PI,
+						    const_SimFW_Movement_stm_ref0_av) = prioritise(	((
+						let
+							const_SimFW_SMovement_lv = const_SimFW_Movement_stm_ref0_lv
+							const_SimFW_SMovement_PI = const_SimFW_Movement_stm_ref0_PI
+							const_SimFW_SMovement_av = const_SimFW_Movement_stm_ref0_av
+						within 
+						stm_ref0::D__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av)[[
+							stm_ref0::terminate <- terminate,
+							stm_ref0::obstacle <- obstacle,
+							stm_ref0::stopCall <- stopCall,
+							stm_ref0::moveCall <- moveCall
+						]]
+					)
+						[|
+							union(
+								{|
+								|},
+								{|
+								|}
+							)
+						|]
+					Memory(id__)
+				)
+				\ union(
+					{|
+					|},
+					{|
+					|}
+				)
+				[|{|terminate|}|>SKIP
+				,<union(visibleMemoryEvents,{terminate}),{tock}>)
+				
+				-- VS version
+				VS__(id__,
+						    const_SimFW_Movement_stm_ref0_lv,
+						    const_SimFW_Movement_stm_ref0_PI,
+						    const_SimFW_Movement_stm_ref0_av) = prioritise(	((
+						let
+							const_SimFW_SMovement_lv = const_SimFW_Movement_stm_ref0_lv
+							const_SimFW_SMovement_PI = const_SimFW_Movement_stm_ref0_PI
+							const_SimFW_SMovement_av = const_SimFW_Movement_stm_ref0_av
+						within 
+						stm_ref0::VS__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av)[[
+							stm_ref0::terminate <- terminate,
+							stm_ref0::obstacle <- obstacle,
+							stm_ref0::stopCall <- stopCall,
+							stm_ref0::moveCall <- moveCall
+						]]
+					)
+						[|
+							union(
+								{|
+								|},
+								{|
+								|}
+							)
+						|]
+					Memory(id__)
+				)
+				\ union(
+					{|
+					|},
+					{|
+					|}
+				)
+				[|{|terminate|}|>SKIP
+				,<union(visibleMemoryEvents,{terminate}),{tock}>)
+			
+				-- O version (optimised) THESE TWO PROCESSES SHOULD BE KEPT IN SYNC WITH THE ABOVE TWO
+				O__(id__,
+						    const_SimFW_Movement_stm_ref0_lv,
+						    const_SimFW_Movement_stm_ref0_PI,
+						    const_SimFW_Movement_stm_ref0_av) = dbisim(prioritise(	((
+						let
+							const_SimFW_SMovement_lv = const_SimFW_Movement_stm_ref0_lv
+							const_SimFW_SMovement_PI = const_SimFW_Movement_stm_ref0_PI
+							const_SimFW_SMovement_av = const_SimFW_Movement_stm_ref0_av
+						within 
+						stm_ref0::O__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av)[[
+							stm_ref0::terminate <- terminate,
+							stm_ref0::obstacle <- obstacle,
+							stm_ref0::stopCall <- stopCall,
+							stm_ref0::moveCall <- moveCall
+						]]
+					)
+						[|
+							union(
+								{|
+								|},
+								{|
+								|}
+							)
+						|]
+					dbisim(Memory(id__))
+				)
+				\ union(
+					{|
+					|},
+					{|
+					|}
+				)
+				[|{|terminate|}|>SKIP
+				,<union(visibleMemoryEvents,{terminate}),{tock}>))
+								
+				-- VS_O version
+				VS_O__(id__,
+						    const_SimFW_Movement_stm_ref0_lv,
+						    const_SimFW_Movement_stm_ref0_PI,
+						    const_SimFW_Movement_stm_ref0_av) = dbisim(prioritise(	((
+						let
+							const_SimFW_SMovement_lv = const_SimFW_Movement_stm_ref0_lv
+							const_SimFW_SMovement_PI = const_SimFW_Movement_stm_ref0_PI
+							const_SimFW_SMovement_av = const_SimFW_Movement_stm_ref0_av
+						within 
+						stm_ref0::VS_O__(id__,
+								    const_SimFW_SMovement_lv,
+								    const_SimFW_SMovement_PI,
+								    const_SimFW_SMovement_av)[[
+							stm_ref0::terminate <- terminate,
+							stm_ref0::obstacle <- obstacle,
+							stm_ref0::stopCall <- stopCall,
+							stm_ref0::moveCall <- moveCall
+						]]
+					)
+						[|
+							union(
+								{|
+								|},
+								{|
+								|}
+							)
+						|]
+					dbisim(Memory(id__))
+				)
+				\ union(
+					{|
+					|},
+					{|
+					|}
+				)
+				[|{|terminate|}|>SKIP
+				,<union(visibleMemoryEvents,{terminate}),{tock}>))
+			
+				HEXT(id__,
+						    const_SimFW_Movement_stm_ref0_lv,
+						    const_SimFW_Movement_stm_ref0_PI,
+						    const_SimFW_Movement_stm_ref0_av) = O__(id__,
+						    const_SimFW_Movement_stm_ref0_lv,
+						    const_SimFW_Movement_stm_ref0_PI,
+						    const_SimFW_Movement_stm_ref0_av) [|shared_variable_events|] SKIP			
+		}
+
+	endmodule",,"tock-CSP
+Complex and long
+Available csp file
+Real-world/research",,,,
+,"-- solitaire.csp
+
+-- version for FDR2
+
+-- Bill Roscoe
+
+-- This file implements the system  described in Section 15.1
+
+-- SETTING UP THE BOARD
+
+-- As described in the text, we use a notation for describing boards that
+-- looks like physical boards
+
+datatype Pictel = X | P | E | S 
+
+-- Here are four, of which the first is the standard:
+-- X is a non-slot,
+-- E is an empty one
+-- P or S is a full one
+-- S is a ""sticky"" peg as described in the text.
+
+-- We could pick a variety of boards to try and solve.  The first one
+-- here is the standard one
+
+Board1 = <<X,X,P,P,P,X,X>,
+          <X,X,P,P,P,X,X>,
+          <S,S,P,P,P,P,P>,
+          <P,P,P,E,P,P,P>,
+          <S,S,P,P,P,P,P>,
+          <X,X,S,P,S,X,X>,
+          <X,X,S,P,S,X,X>>
+
+-- Of the following, some are soluble and some are not.  Unlike the first
+-- one I have not set which pegs should be ""sticky"" for tactic 2.  Where
+-- necessary you could experiment with this and other tactics yourself.
+
+Board2 = <<X,X,X,S,X,X,X>,
+          <X,X,S,S,S,X,X>,
+          <X,P,P,P,P,P,X>,
+          <P,P,P,E,P,P,P>,
+          <X,S,P,P,P,P,X>,
+          <X,X,P,P,P,X,X>,
+          <X,X,X,P,X,X,X>>
+
+Board3 = <<X,X,P,P,P,X,X>,
+          <X,P,P,P,P,P,X>,
+          <P,P,P,P,P,P,P>,
+          <P,P,P,E,P,P,P>,
+          <P,P,P,P,P,P,P>,
+          <X,P,P,P,P,P,X>,
+          <X,X,P,P,P,X,X>>
+
+Board4 = <<X,X,X,S,S,S,X,X,X>,
+          <X,X,X,S,S,S,X,X,X>,
+          <S,S,S,P,P,P,P,P,P>,
+          <S,S,P,P,E,P,P,P,P>,
+          <S,S,S,P,P,P,P,P,P>,
+          <X,X,X,P,P,P,X,X,X>,
+          <X,X,X,P,P,P,X,X,X>>
+
+Board5 = <<X,X,P,P,P,X,X>,
+          <P,P,P,P,P,P,P>,
+          <P,P,P,E,P,P,P>,
+          <P,P,P,P,P,P,P>,
+          <X,X,P,P,P,X,X>>
+
+
+-- The following sets up which board the rest of the script uses.  
+-- I strongly recommend you
+-- only investigate most of the other examples above using appropriate tactics
+-- to limit the state coverage.
+
+Board = Board1
+
+-- Having made our choice of board, we can map it to a system of processes
+-- The following manipulations are designed to make the above notation
+-- easy to access
+
+Height = #Board
+Width = #(head(Board))
+
+nth(n,xs) = if n==0 then head(xs) 
+                    else nth(n-1,tail(xs))
+
+init(i,j) = nth(j,nth(Height-1-i,Board))
+
+BoardCoords = {(i,j) | i <- {0..Height-1}, j <- {0..Width-1}, init(i,j)!=X}
+
+-- As discussed in the book, we use an enlarged board in declaring the
+-- possible move events:
+
+Ycoords = {(-2)..Height+1}
+Xcoords = {(-2)..Width+1}
+
+channel up,down,left,right:Ycoords.Xcoords
+channel done
+
+-- SLOT PROCESSES
+
+Full(i,j,target) = (target==P) & done -> Full(i,j,target)
+                  [] up.i+2.j -> Empty(i,j,target)
+                  [] down.i-2.j -> Empty(i,j,target)
+                  [] right.i.j+2 -> Empty(i,j,target)
+                  [] left.i.j-2 -> Empty(i,j,target)
+                  [] up.i+1.j -> Empty(i,j,target)
+                  [] down.i-1.j -> Empty(i,j,target)
+                  [] right.i.j+1 -> Empty(i,j,target)
+                  [] left.i.j-1 -> Empty(i,j,target)
+
+Empty(i,j,target) = (target==E) & done -> Empty(i,j,target)
+                  [] up.i.j -> Full(i,j,target)
+                  [] down.i.j -> Full(i,j,target)
+                  [] right.i.j -> Full(i,j,target)
+                  [] left.i.j -> Full(i,j,target)
+
+Slot(i,j) = if init(i,j) == E then Empty(i,j,P)
+                              else Full(i,j,E)
+
+-- Each slot process has to co-operate in each move event
+-- that it can participate in.
+
+Alpha(i,j) = Union({{done},
+                    {up.i+k.j    | k <-{0,1,2}},
+                    {down.i-k.j  | k <-{0,1,2}},
+                    {left.i.j-k  | k <-{0,1,2}},
+                    {right.i.j+k | k <-{0,1,2}}})
+
+-- The ""real moves"" are those where all three slots involved are
+-- actually on the board:
+
+JumpTos = {up.i.j, down.i.j, left.i.j, right.i.j | (i,j) <- BoardCoords}
+
+JumpOvers = {up.i+1.j, down.i-1.j, left.i.j-1, 
+             right.i.j+1 | (i,j) <- BoardCoords}
+
+JumpFroms = {up.i+2.j, down.i-2.j, left.i.j-2, 
+             right.i.j+2 | (i,j) <- BoardCoords}
+
+RealMoves = inter(JumpTos,inter(JumpOvers,JumpFroms))
+
+-- so we can calculate which moves the processes perform that are
+-- not allowed.
+
+
+OffBoardMoves = diff({|up,down,left,right|},RealMoves)
+
+-- The CSP description of the puzzle is just the following process,
+-- which can perform just the sequences of moves that are legal for the
+-- puzzle and can communicate done just when the puzzle has been solved.
+
+Puzzle = (|| (i,j):BoardCoords @ [Alpha(i,j)] Slot(i,j)) [|OffBoardMoves|] STOP
+
+assert STOP [T= Puzzle \ {|up,down,left,right|}
+
+-- But, at least for the standard board, there are too many states in
+-- this system for the check to complete on ordinary computers.
+-- So we can cut the state-space by seeing if there are solutions
+-- obeying some additional rules.  The following says that moves in the
+-- four directions rotate strictly:
+
+Tactic1 = left?x -> Tactic1' 
+Tactic1' = up?x -> Tactic1'' 
+Tactic1'' = right?x -> Tactic1''' 
+Tactic1''' = down?x -> Tactic1 
+
+PuzzleWithTactic1 = Puzzle [|RealMoves|] (Tactic1 [|OffBoardMoves|] STOP)
+
+-- For the standard board this fails, meaning there is no such solution.
+
+assert STOP [T= PuzzleWithTactic1 \ {|up,down,left,right|}
+
+-- For tactic 2 we adopt the ""sticky"" peg approach described in the text
+-- and prevent pegs labelled S from moving until there are a given
+-- number left.
+
+NoDelays = card({(i,j) | (i,j) <- BoardCoords, init(i,j) == P})
+
+Delaymoves = diff(Union({Alpha(i,j) | (i,j) <- BoardCoords, init(i,j)==S}),
+                  {done})
+
+Nodelaymoves = diff(RealMoves,Delaymoves)
+
+Tactic2(n) = if n==0 then []x:RealMoves @ x -> Tactic2(0)
+                     else []x:Nodelaymoves @ x -> Tactic2(n-1)
+
+-- The higher the following number the more states are found and
+-- the more likely you are to find a solution if there is one.
+
+NonStickyAllowance = 4
+
+Puzzle2 = Puzzle [|RealMoves|] Tactic2(NoDelays-NonStickyAllowance)
+
+assert STOP [T= Puzzle2 \ {|up,down,left,right|}
+
+-- Clearly the tactics can be varied or combined.","https://www.cs.ox.ac.uk/publications/books/concurrency/examples/bookexamples/
+
+@book{550448,
+author = {Roscoe, A. W.},
+title = {The  Theory and Practice of Concurrency},
+year = {1997},
+isbn = {0136744095},
+publisher = {Prentice Hall PTR},
+address = {USA},
+abstract = {From the Publisher:Since the introduction of Hoares' Communicating Sequential Processes notation, powerful new tools have transformed CSP into a practical way of describing industrial-sized problems. This book gives you the fundamental grasp of CSP concepts you'll need to take advantage of those tools.Part I provides a detailed foundation for working with CSP, using as little mathematics as possible. It introduces the ideas behind operational, denotational and algebraic models of CSP. Parts II and III go into greater detail about theory and practice. Topics include: parallel operators, hiding and renaming, piping and enslavement, buffers and communication, termination and sequencing, and semantic theory. Three detailed practical case studies are also presented.For anyone interested in modeling sequential processes.}
+}","Medium length and complexitry
+Book material
+Available csp file
+90+ citations",,,,
+Concurrent Stack,"
+-- number of processes
+N = 5
+-- stack size
+SIZE = 2
+
+--------- channel ----------------------------
+channel push_inv, pop_inv :{0..N-1}
+channel push_res, pop_res:{0..N-1}.{0..SIZE}
+
+--------- channel in the abstract specification model ----------------
+channel push_req_set_abs :{0..N-1}.{0..SIZE}
+channel pop_req_set_abs: {0..N-1}.{V..SIZE-1}
+V = -1
+
+--------- channel in the concrete implementation model ---------------
+channel push_req_set1, push_req_set2:{0..N-1}.{0..SIZE}.{0..SIZE}
+channel pop_req_set1:{0..N-1}.{0..SIZE}.{0..SIZE}
+channel pop_req_set2
+channel pop_req_set3:{0..N-1}.{1..SIZE}.{0..SIZE-1}
+
+--------- The abstract specification model (Algorithm 3) -----------------------------------------------
+--------- The model is composed of three steps, first the invokation of the operation (e.g., push_inv), 
+--------- then its operation (e.g., push_req_set_abs), and at last the response of the operation (e.g., push_res)
+
+-- *push_req_set_abs!i?x corresponds to procedure push, lines 1 - 6, i is process id, x is the stack size  
+-- *push_res.i.x corresponds to Algorithm 3, procedure push, line 7
+PushAbs(i) = push_inv.i -> push_req_set_abs!i?x ->  push_res.i.x -> SKIP
+
+-- *pop_req_set_abs!i?x corresponds to procedure pop, lines 1 - 8
+-- *pop_res.i.x+1 corresponds to Algorithm 3, procedure pop, line 9
+PopAbs(i) = pop_inv.i -> pop_req_set_abs!i?x -> pop_res.i.x+1 -> SKIP 
+
+-- *Controller_Abs synchronizes with other processes, mainly for shared variables read and write operations
+Controller_Abs(HA) = HA < SIZE & push_req_set_abs?i!HA+1 -> Controller_Abs(HA+1)
+	      [] HA == SIZE & push_req_set_abs?i!HA -> Controller_Abs(HA)
+	      [] HA == 0 & pop_req_set_abs?i!HA-1 -> Controller_Abs(HA)
+	      [] HA> 0 & pop_req_set_abs?i!HA-1 -> Controller_Abs(HA-1)
+
+ProcessAbs(i) = (PushAbs(i)[]PopAbs(i));ProcessAbs(i)
+
+Alpha_push_pop_req_set_abs = {push_req_set_abs.i.j, pop_req_set_abs.i.k| i <-{0..N-1}, j <- {0..SIZE}, k <- {V..SIZE-1}}
+
+StackAbs = ((|||x:{0..N-1}@ProcessAbs(x))[|Alpha_push_pop_req_set_abs|] Controller_Abs(0))\Alpha_push_pop_req_set_abs
+
+--------- The concrete implementation model (Algorithm 2) ----------------------------
+-- *push_req_set1!i?x?y corresponds to procedure push, line 1
+--  i is process id, x is the value of latest stack size, y is the local variable recording the stack size
+Push(i) = push_inv.i -> push_req_set1!i?x?y -> PushLoop(i, y)
+
+PushLoop(i, HL) = 
+-- *corresponds to procedure push, lines 3 - 7
+		  push_req_set2!i?HL?y -> push_res.i.y -> SKIP
+	      []
+-- *corresponds to procedure push, lines 8 - 10 
+	      push_req_set1!i?x:diff({0..SIZE},{HL})?y -> PushLoop(i, y)
+
+-- *pop_req_set1!i?x?y corresponds to procedure pop, line 1
+--  i is process id, x is the value of latest stack size, y is the local variable recording the stack size		  
+Pop(i) = pop_inv.i -> pop_req_set1!i?x?y -> PopLoop(i, y)
+
+PopLoop(i, HL) = 
+-- *corresponds to procedure pop, lines 2 - 3
+		 HL == 0 & pop_req_set2 -> pop_res.i.0 -> SKIP
+		 []
+-- *corresponds to procedure pop, lines 9 - 11
+		 HL != 0 & pop_req_set2 -> (pop_req_set1!i?x:diff({0..SIZE}, {HL})?y -> PopLoop(i, y)
+									[]
+-- *corresponds to procedure pop, lines 6 - 8
+									pop_req_set3!i?HL?y -> pop_res.i.(y+1) -> SKIP)
+
+Controller(H) = push_req_set1?i!H!H -> Controller(H)
+		[]
+		H < SIZE & push_req_set2?i!H!H+1 -> Controller(H+1)
+		[]
+		H == SIZE & push_req_set2?i!H!H -> Controller(H)
+		[]
+		pop_req_set1?i!H!H -> Controller(H)
+		[]
+		H > 0 & pop_req_set3?i!H!H-1 -> Controller(H-1)
+
+Process(i) = (Push(i)[]Pop(i));Process(i)
+
+Alpha_push_pop_req_set = {push_req_set1.i.j.k, push_req_set2.i.j.k, pop_req_set1.i.j.k, pop_req_set3.i.m.n | i <-{0..N-1}, j <- {0..SIZE}, k<- {0..SIZE}, m <- {1..SIZE}, n <- {0..SIZE-1}}
+
+Stack = ((|||x:{0..N-1}@Process(x))[|Alpha_push_pop_req_set|] Controller(0))\union(Alpha_push_pop_req_set, {pop_req_set2})
+
+assert StackAbs [F= Stack","@inproceedings{10.1007/978-3-642-34281-3_27,
+author = {Shi, Ling and Liu, Yang and Sun, Jun and Dong, Jin Song and Carvalho, Gustavo},
+title = {An analytical and experimental comparison of CSP extensions and tools},
+year = {2012},
+isbn = {9783642342806},
+publisher = {Springer-Verlag},
+address = {Berlin, Heidelberg},
+url = {https://doi.org/10.1007/978-3-642-34281-3_27},
+doi = {10.1007/978-3-642-34281-3_27},
+abstract = {Communicating Sequential Processes (CSP) has been widely applied to modeling and analyzing concurrent systems. There have been considerable efforts on enhancing CSP by taking data and other system aspects into account. For instance, CSPM combines CSP with a functional programming language whereas CSP# integrates high-level CSP-like process operators with low-level procedure code. Little work has been done to systematically compare these CSP extensions, which may have subtle and substantial differences. In this paper, we compare CSPM and CSP# not only on their syntax, but also operational semantics as well as their supporting tools such as FDR, ProB, and PAT. We conduct extensive experiments to compare the performance of these tools in different settings. Our comparison can be used to guide users to choose the appropriate CSP extension and verification tool based on the system characteristics.},
+booktitle = {Proceedings of the 14th International Conference on Formal Engineering Methods: Formal Methods and Software Engineering},
+pages = {381–397},
+numpages = {17},
+location = {Kyoto, Japan},
+series = {ICFEM'12}
+}","Medium length and complex
+Available csp file
+Tool evaluation",,,,
+Distributed Database,"-- Distributed database 
+
+-- Bill Roscoe, November 1996
+-- (adapted from the FDR1 file by me and Helen MacCarthy)
+
+-- This file provides an interesting example of how effective
+-- FDR's compression operators can be in improving performance on
+-- typical practical examples.
+
+include ""compression.csp""
+
+-- This file illustrates the simple updates model (Algorithm 1) from
+-- my paper ""maintaining consistency in distributed databases""
+-- and is the version discussed in Section 15.2.1 of my book.
+
+-- It is based on a ring of nodes, each holding a copy of a datum.
+
+-- number of nodes
+
+N = 4 
+
+-- This number is such that all the checks go through reasonably
+-- comfortably.  As they vary considerably in complexity some will
+-- go through with larger N.
+
+NodeNames = {0..N-1}
+
+-- We are illustrating the theory of data independence introduced in
+-- Section 15.2.2, and hence set up our datatypes and systems
+-- so as conveniently to examine versions with different-sized
+-- types
+
+datatype data = zero | one | two | three
+
+One = {zero}
+Two = {zero, one}
+Three = {zero, one, two}
+Four = {zero, one, two, three}
+
+-- The channels for the basic system are:
+
+channel in : NodeNames . data
+channel ring,out : NodeNames . NodeNames . data
+channel quiet
+
+limit = 2 -- the most updates we allow to be running from one source
+          -- required to make it finite state.
+
+-- The following list represents the priorties of nodes: you can
+-- set this however you like, but the following is chosen to be fairly
+-- ""random"".
+
+prioritylist = <(i*37)%20 | i <- <1..20>>
+
+nth(n,xs) = if n==0 then head(xs) else nth(n-1,tail(xs))
+
+priority(i,j) = (nth(i,prioritylist) > nth(j,prioritylist))
+
+-- The nodes behave as described in the text, and follow the principles
+-- of Deadlock Rule 8, namely never allowing input from the outside
+-- to fill up any node.  The parameter T is there to support data-independent
+-- reasoning.
+
+N0(i,E,T) = (#E<limit) & in.i?x:T -> N1(i,E^<x>,i,x,T) 
+          [] #E==0 & quiet -> N0(i,E,T)
+          [] ring.i?j?x:T -> (if #E==0 
+                          then (out.i.j!x -> N1(i,E,j,x,T))
+                          else (if i==j
+                                then N0(i,tail(E),T) 
+                                else (if priority(i,j)
+                                  then (out.i.j!x -> N1(i,<>,j,x,T))
+                                  else N0(i,E,T) )))
+
+N1(i,E,j,x,T) = ring.((i+1)%N)!j!x -> N0(i,E,T)
+             [] ring.i?k?y:T -> 
+               (if #E==0
+                then (out.i.k!y -> ring.((i+1)%N)!j!x -> N1(i,E,k,y,T) )
+                else (if k==i
+                      then N1(i,tail(E),j,x,T) 
+                      else (if priority(i,k)
+                            then (out.i.k!y -> ring.((i+1)%N)!j!x -> 
+                                  N1(i,<>,k,y,T) )
+                            else  N1(i,E,j,x,T) )))
+
+Alpha(i) = {|in.i, out.i, ring.i, ring.(i+1)%N, quiet|}
+
+-- We can define the system either conventionally
+
+RING(T) = (|| i:NodeNames @ [Alpha(i)] N0(i,<>,T))\{|ring|}
+
+-- or as a list of process/alphabet pairs to make them suitable for
+-- applying the high-level compression operators from compression.csp.
+-- Note this second form has not yet had {|ring|} hidden.
+
+ListRing(T) = <(N0(i,<>,T), Alpha(i)) | i <- <0..N-1>>
+
+-- The following process exploits data-independence to speed up 
+-- a deadlock check.  It relies on the fact that the deadlock
+-- behaviour does not depend on the values of the updates circulating
+-- (though it may on their origins).
+
+-- By the arguments in Section 15.2.2 it is sufficient, for specifications
+-- that do not specify which values in the data-independent type occur,
+-- to consider behaviour with only one value.  The conventional
+-- system we get is then
+
+assert RING(One) :[deadlock free [F]]
+
+-- The utility of compression is shown by using the most basic
+-- high-level compression function together with the fact that we
+-- can hide all events when checking for deadlock:
+
+transparent normal
+
+assert LeafCompress(normal)(ListRing(One))(Events) :[deadlock free [F]]
+
+-- One of the most important specifications of our ring is that,
+-- in the absence of further inputs of updates, will eventually become
+-- quiescent with no updates either circulating or expected back.
+-- The following uses the artificially-included event (quiet) which has
+-- something in common with the event done used in puzzle examples,
+-- since it is identifying a global state by synchronisation, to
+-- check for this: quiet must never be refused.
+
+-- The cleanest way to check this is first to check 
+
+assert (RING(One)\{|out|}) :[livelock free]
+
+-- or equivalently
+
+assert (LeafCompress(normal)(ListRing(One))({|ring,out|})) :[livelock free]
+
+-- This shows that the system cannot make infinite
+-- progress without communication on channel in, and then to prove that
+-- the abstracted process
+
+QuiescentCheck = MAbs({|in,out|},{|out|},RING(One))
+
+-- failures-refines
+
+QS = quiet -> QS
+
+assert QS [F= QuiescentCheck
+
+-- This shows that the system can never get into a non-quiescent state where
+-- it can only make progress by communicating on channel in.  In other words,
+-- whenever no further inputs are made after a given point, and outputs
+-- are allowed,  the system will eventually stabilize (which we know will
+-- happen by the livelock checks above) in a state offering quiet.  MAbs
+-- is the mixed abstraction function described in chapter 12.
+
+MAbs(X,Y,P) = let Delays = diff(X,Y)
+              within
+	      (P[|Delays|]CHAOS(Delays))\X
+
+-- The corresponding compressed check uses a generalized version of the
+-- leaf compression function:
+
+QuiescentCheck' = 
+MixedAbsLeafCompress(normal)(ListRing(One))({|in,out,ring|},{|out,ring|})
+
+assert QS [F= QuiescentCheck'
+
+--~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~~^~
+
+-- That is all we want to establish about liveness properties.  So we can
+-- now turn to proving that the database never gets inconsistent.  Specifically
+-- we want to show that whenever the ring is quiescent then all nodes agree
+-- on the value of the register.
+
+-- We can do this by adding register processes to hold the value at each node:
+
+channel read:NodeNames.data
+
+VAR(i,x,T) = (out.i?j?v:T -> VAR(i,v,T))
+           [] (in.i?v:T -> VAR(i,v,T))
+           [] read.i.x -> VAR(i,x,T)
+
+VARS(T,x0) = ||| i:NodeNames @ VAR(i,x0,T)
+
+-- The above are a system or registers for the data-values at the various
+-- nodes, and the system below is the result of combining them with the ring.
+
+RV(T,x0) = (RING(T) [|{|in,out|}|] VARS(T,x0))\{|out|}
+
+-- Obviously we need an initial consistent value for our registers.
+-- In order to use the theorems about data independence we need to
+-- initialize it neutrally, though with care it would be able to argue
+-- this was not necessary.
+
+channel init:data
+
+WithVars(T) = init?x0:T -> RV(T,x0)
+
+
+-- SS represents, as a trace specification, the coherence behaviour we
+-- want (when quiescent, all equal).   
+
+SS =  quiet -> Q0 [] ([]a:(diff(Events,{quiet})) @ a -> SS)
+
+Q0 =   read?j.x -> Q1(x)
+    [] quiet -> Q0
+    [] ([]a:(diff(Events,{|quiet,read|})) @ a -> SS)
+
+Q1(x) =  read?k!x ->  Q1(x) 
+      [] quiet -> Q0 
+      [] ([]a:(diff(Events,{|quiet,read|})) @ a -> SS)
+
+assert init?x:Two -> SS [T= WithVars(Two)
+
+-- In the text it is briefly stated that it is sufficient to consider
+-- the case where all but perhaps one of the input values is sufficient.
+-- This applies in the present case; you can find detailed justification
+-- in some of Lazic's work cited in the text.
+
+
+OneOne = in?i!one -> Zeros 
+      [] in?i!zero -> OneOne	      
+      [] init.zero -> OneOne
+      [] init.one -> Zeros
+
+
+Zeros = in?i!zero -> Zeros
+
+-- WithVars with this restriction is 
+
+WVDI = WithVars(Two)[|{|in,init|}|]OneOne
+
+-- so an equivalent but more efficient check is
+       
+assert init?x:Two -> SS [T= WVDI
+
+-- We haven't configured a version of these checks with compression.
+-- You can get some improvement by compressing the interactions between
+-- a N0 and its register:
+
+node(i,x,T) = normal((N0(i,<>,T) [|{|in,out|}|] VAR(i,x,T))\{|out|})
+
+-- but I will not take this further here.
+
+--!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!!|!
+
+-- Alternative specification
+
+-- Rather than prove direct coherence as above we can specify the
+-- behaviour we might expect of RING to make it work in the context
+-- of updating VAR's.  The specification keeps values 
+-- for all four copies, and bans quiet unless all four are equal.
+
+RS(T) = Q(<zero | i <- <0..N-1>>,T)
+
+
+Q(vs,T) = allequal(vs) & quiet -> Q(vs,T)
+        [] in?i?v:T -> Q(update(vs,i,v),T)
+        [] out?i?j?v:T -> Q(update(vs,i,v),T)
+
+
+allequal(vs) = allequalto(head(vs),tail(vs))
+
+allequalto(x,xs) = if xs==<> then true
+                             else head(xs)==x and allequalto(x,tail(xs))
+
+update(vs,i,v) = if i==0 then <v>^tail(vs)
+                         else <head(vs)>^update(tail(vs),i-1,v)
+
+-- Here one should TRACE check RING(Two) against RS(Two).
+
+assert RS(Two) [T= RING(Two) 
+
+assert RS(Two) [T= RING(Two) [|{|in,init|}|] OneOne
+","https://www.cs.ox.ac.uk/ucs/CSPM.html
+
+
+@book{roscoe2010understanding,
+  title={Understanding Concurrent Systems},
+  author={Roscoe, A.W.},
+  isbn={9781848822580},
+  lccn={2010936468},
+  series={Texts in Computer Science},
+  url={https://books.google.co.uk/books?id=SZCWr4bCCtcC},
+  year={2010},
+  publisher={Prentice Hall}
+}","Seminal work
+500+ citations
+Medium complexity
+Heavily commented
+Medium length
+Available csp file
+",,,,
